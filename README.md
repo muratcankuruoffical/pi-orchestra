@@ -63,7 +63,7 @@ The Opus layer costs no money but it does consume **plan quota**. The skill is w
 ## Install
 
 ```bash
-git clone https://github.com/endigitals/pi-orchestra ~/pi-orchestra
+git clone git@github.com:muratcankuruoffical/pi-orchestra.git ~/pi-orchestra
 cd ~/pi-orchestra && ./install.sh
 ```
 

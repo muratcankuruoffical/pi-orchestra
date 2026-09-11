@@ -1,5 +1,5 @@
 {
-  "name": "@endigitals/pi-orchestra",
+  "name": "pi-orchestra",
   "version": "0.1.0",
   "description": "Cost-optimized coding system: Claude Code orchestrator with local Qwen3 and DeepSeek V4.1 Flash executors",
   "license": "MIT",
@@ -22,5 +22,10 @@
   ],
   "bin": {
     "orchestra": "./bin/orchestra"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/muratcankuruoffical/pi-orchestra.git"
+  },
+  "author": "muratcankuruoffical"
 }
