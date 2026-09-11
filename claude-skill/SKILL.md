@@ -90,11 +90,11 @@ When the delegated work returns, **you** verify it. Do not trust a "tests passed
 2. Run the project's own commands: typecheck → lint → test. Find them in `AGENTS.md`, `CLAUDE.md`, `package.json`, `composer.json`, `Makefile`, or `pyproject.toml`.
 3. At SIMPLE tier, an `ESCALATE:` reply means no code was written — raise the tier and delegate again.
 
-### Known failure: the local model normalizes code style
+### Known failure: models normalize code style
 
-The local model (Qwen3 8B) rewrites the block it edits and converts quote style, indentation, and similar details to its own preference — despite an explicit prohibition in its prompt. This is measured, reproducible behavior.
+Every tier does this, not just the local one. The model rewrites the block it edits and converts quote style, indentation, and similar details to its own preference — despite an explicit prohibition in its prompt. Measured and reproducible on both Qwen3 8B and DeepSeek V4.1 Flash.
 
-So always read the diff from a SIMPLE-tier run yourself. If a one-line typo fix shows five changed lines, the extra lines are style noise. Revert the unrelated hunks:
+So always read the diff yourself, at every tier. If a one-line typo fix shows five changed lines, the extra lines are style noise. Revert the unrelated hunks:
 
 ```bash
 git diff                  # see the whole thing first

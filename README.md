@@ -40,12 +40,15 @@ The idea is simple: **judgment is expensive, typing is cheap.** Opus earns its k
 
 ## Why this combination
 
-| Layer | Runs on | Cost |
-|---|---|---|
-| Orchestrator + planner | Claude Code, Opus 5 | **$0 marginal** (subscription) |
-| SIMPLE | Ollama, Qwen3 8B | **$0** |
-| MEDIUM / HARD | DeepSeek V4.1 Flash (`deepseek-flash`) | ~$0.15 / $0.60 per M |
-| Integration + review + fix | Claude Code, Opus 5 | **$0 marginal** (subscription) |
+| Layer | Runs on | Cost | Measured latency |
+|---|---|---|---|
+| Orchestrator + planner | Claude Code, Opus 5 | **$0 marginal** (subscription) | — |
+| SIMPLE | Ollama, Qwen3 8B | **$0** | 60–140 s |
+| MEDIUM | DeepSeek V4.1 Flash | ~$0.15 / $0.60 per M | ~20 s |
+| HARD | DeepSeek V4.1 Flash, thinking high | ~$0.15 / $0.60 per M | ~40 s |
+| Integration + review + fix | Claude Code, Opus 5 | **$0 marginal** (subscription) | — |
+
+The local tier is by far the slowest in wall-clock terms. It is worth it only when the task is genuinely trivial: at SIMPLE scope you are trading a minute of latency for a few cents, and the model needs no reasoning to get it right. Anything larger belongs on DeepSeek, which is both faster and better.
 
 DeepSeek is the only real cash spend. A typical feature (≈200K in / 20K out) costs about **$0.04**.
 
@@ -205,7 +208,7 @@ install.sh
 
 **Verification always belongs to the orchestrator.** Trusting a "tests passed" claim is the easiest way for this architecture to break. Opus runs the command and reads the output itself.
 
-**`orchestra` prints the diff itself.** The local model normalizes code style (quote characters, indentation) beyond the requested change, and no amount of prompting stopped it — it even reports that it changed nothing else. So the defense is mechanical rather than a matter of trusting the model: the diff always lands in front of the orchestrator.
+**`orchestra` prints the diff itself.** Models normalize code style (quote characters, indentation) beyond the requested change, and no amount of prompting stopped it — one even reported that it had changed nothing else. This happens at every tier, not just the local one. So the defense is mechanical rather than a matter of trusting the model: the diff always lands in front of the orchestrator.
 
 **The fix loop is capped at 2 rounds.** After that the system stops and reports, rather than burning quota and money in a loop.
 
