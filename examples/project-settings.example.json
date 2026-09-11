@@ -1,0 +1,14 @@
+{
+  "orchestra": {
+    "verify": {
+      "typecheck": "npm run typecheck",
+      "lint": "npm run lint",
+      "test": "npm test -- --run"
+    }
+  },
+  "subagents": {
+    "agentOverrides": {
+      "ds-worker": { "model": "deepseek-flash" }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "name": "@endigitals/pi-orchestra",
+  "version": "0.1.0",
+  "description": "Maliyet-optimize çok katmanlı kodlama agent sistemi: lokal model + DeepSeek + Claude Code review, pi coding agent üzerinde",
+  "license": "MIT",
+  "keywords": ["pi-package", "pi", "pi-coding-agent", "subagents", "orchestrator", "cost-optimization", "local-llm"],
+  "files": ["agents", "skills", "prompts", "config", "install.sh", "README.md"],
+  "pi": {
+    "skills": ["./skills"],
+    "prompts": ["./prompts"]
+  },
+  "pi-subagents": {
+    "agents": ["./agents"]
+  },
+  "peerDependencies": {
+    "pi-subagents": "*"
+  }
+}
