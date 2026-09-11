@@ -8,7 +8,13 @@
 # doğrulamayı ve review'ı Claude Code kendisi yapar.
 set -euo pipefail
 
-REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# ~/.local/bin/orchestra bir symlink olabilir; gerçek repo kökünü bulmak için zinciri çöz
+SELF="${BASH_SOURCE[0]}"
+while [[ -L "$SELF" ]]; do
+  TARGET="$(readlink "$SELF")"
+  [[ "$TARGET" == /* ]] && SELF="$TARGET" || SELF="$(cd "$(dirname "$SELF")" && pwd)/$TARGET"
+done
+REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 
 usage() {
   cat >&2 <<'U'
@@ -67,7 +73,10 @@ command -v pi >/dev/null || { echo "pi bulunamadı. install.sh çalıştır." >&
 # YAML frontmatter'ı at, sistem promptu olarak gövdeyi kullan
 SYSTEM="$(awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n>=2' "$SYSFILE")"
 
-ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --system-prompt "$SYSTEM")
+# --append-system-prompt: pi'nin varsayılan promptu (araç kullanım disiplini dahil)
+# korunur, agent kuralları üstüne eklenir. Küçük modeller bu scaffolding olmadan
+# tool call üretmek yerine JSON'u düz metin olarak yazıyor.
+ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --append-system-prompt "$SYSTEM")
 [[ -n "$TOOLS" ]] && ARGS+=(--tools "$TOOLS")
 
 if [[ $DRY -eq 1 ]]; then

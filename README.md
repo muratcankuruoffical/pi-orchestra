@@ -70,6 +70,24 @@ Sonra DeepSeek anahtarını bağla:
 pi          # → /login → DeepSeek → anahtarı yapıştır
 ```
 
+Her şeyin yerinde olduğunu doğrula:
+
+```bash
+./install.sh --check
+```
+
+```
+==> Durum
+  ✓ pi 0.85.1
+  ✓ Claude Code 2.1.268 — orchestrator katmanı
+  ✓ lokal model hazır (qwen-coder-local, 32K context)
+  ✓ DeepSeek anahtarı bağlı
+  ✓ orchestra PATH'te
+  ✓ Claude Code skill'i kurulu
+```
+
+`--check` hiçbir şey kurmaz, sadece denetler. Kurulumdan sonra bir şey bozulursa ilk buraya bak.
+
 `install.sh` idempotenttir ve mevcut ayarlarını ezmez:
 
 - `pi` + `pi-lens` kurar (npm'in `minimumReleaseAge` kapısını aşarak)
@@ -96,6 +114,32 @@ auth middleware'e rate limiting ekle
 
 Seviyeyi kendin de dayatabilirsin: *"bunu lokalde yap"*, *"bu zor bir iş"*.
 
+### Tipik bir oturum
+
+```
+> auth middleware'e rate limiting ekle
+
+→ ORTA: 3 dosya (middleware, config, test), mevcut middleware desenine uyuyor.
+  [orchestra] ds-worker → deepseek/deepseek-flash (thinking=off)
+
+  Değişen: app/Http/Middleware/RateLimit.php (yeni), config/auth.php, tests/Feature/RateLimitTest.php
+  Doğrulama: php artisan test --filter=RateLimit → 4 passed
+  Entegrasyon: config/auth.php içindeki anahtar adını mevcut adlandırmaya çevirdim.
+  Kalan risk: Redis store varsayıldı; file cache kullanıyorsan limit süreci başına olur.
+```
+
+Opus sınıflandırdı, DeepSeek yazdı, Opus doğrulayıp entegre etti. Tek para harcaması DeepSeek tarafında, birkaç sent.
+
+### Ne zaman ne olur
+
+| Sen ne dersin | Ne olur |
+|---|---|
+| "şu değişken adı yanlış, düzelt" | BASİT → lokal model, $0 |
+| "bu endpoint'e filtreleme ekle" | ORTA → DeepSeek |
+| "ödeme akışında race condition var" | ZOR → DeepSeek + thinking high, Opus kararı verir |
+| "bu mimariyi nasıl kurmalıyız?" | Delege edilmez — saf yargı işi, Opus'ta kalır |
+| "testleri çalıştır" | Delege edilmez — Opus kendisi koşturur |
+
 ### CLI'ı elle kullanmak
 
 ```bash
@@ -106,6 +150,18 @@ orchestra zor   "Sipariş listesi N+1 sorgu üretiyor, kök nedeni bul ve çöz"
 orchestra basit --dry-run "..."     # hangi model seçilecek, çalıştırmadan gör
 orchestra orta --cwd ~/proje "..."  # başka dizinde çalıştır
 ```
+
+## Kotanı ve maliyetini izlemek
+
+```bash
+# Claude abonelik kotası — orchestrator + integration bunu tüketir
+claude    # içeride: /usage
+
+# DeepSeek harcaması
+open https://platform.deepseek.com/usage
+```
+
+Kota %80'i geçtiyse: ORTA işleri de lokale zorlamak yerine, ZOR işleri ertele ve BASİT'leri lokalde biriktir. Orchestrator'ın kendisi Opus olduğu için her oturumun bir taban maliyeti var.
 
 ## Sınıflandırma rubriği
 
@@ -149,21 +205,46 @@ install.sh
 
 **Küçük düzeltmeler delege edilmez.** Birkaç satırlık tip/import/lint düzeltmesi için yeniden delegasyonun gecikmesi tasarrufa değmez; orchestrator kendisi yapar.
 
-## Sık karşılaşılan sorun
+## Sorun giderme
 
-```
-Failed to load extension ... Cannot find module '.../pi-ai/dist/index.js/compat'
-```
+Önce her zaman `./install.sh --check`.
 
-npm'de `minimumReleaseAge` ayarlıysa `npm install -g @earendil-works/pi-coding-agent` pi'yi eski bir sürüme düşürür. Çözüm:
+**`Cannot find module '.../pi-ai/dist/index.js/compat'`**
+
+npm'de `minimumReleaseAge` ayarlıysa `npm install -g @earendil-works/pi-coding-agent` pi'yi eski bir sürüme düşürür ve eklentileriyle uyumsuz kalır.
 
 ```bash
 npm install -g --min-release-age=0 @earendil-works/pi-coding-agent pi-lens
 ```
 
-`install.sh` bunu zaten yapar ve uyumsuzlukta açık hatayla durur.
+**`pi list` boş / paketler bulunamıyor**
 
-nvm kullanıyorsan: `pi` hangi node sürümü aktifse onun global paketlerini arar. Sürüm değiştirdikten sonra paketleri yeniden kur.
+`pi`, hangi node sürümü aktifse onun global dizinine bakar. nvm ile sürüm değiştirdiysen paketleri o sürüm altında yeniden kur. `install.sh` başlangıçta `nvm use default` yapar.
+
+**`Agent tanımı yok: .../agents/local-coder.md`**
+
+`orchestra` repo kökünü symlink'i çözerek bulur. Repo'yu taşıdıysan `./install.sh` ile symlink'leri yenile.
+
+**Lokal model indirmesi takılıyor**
+
+Ollama parçalı indirir ve kaldığı yerden devam eder; ilerleme durursa ağı değiştirip tekrar çalıştır:
+
+```bash
+ollama pull qwen2.5-coder:7b
+```
+
+İlerlemeyi `du -k ~/.ollama/models/blobs/*-partial` ile izle — dosya önceden ayrıldığı için `ls -lh` boyutu sabit görünür, gerçek ilerleme ayrılmış blok sayısındadır.
+
+**DeepSeek `Insufficient Balance` (HTTP 402)**
+
+Anahtar doğru ama bakiye yok. `platform.deepseek.com` üzerinden yükle. Geçersiz model id'si 404 döner, 402 değil — bu ikisini karıştırma.
+
+**Ollama çalışmıyor**
+
+```bash
+open -a Ollama          # ya da: ollama serve
+ollama list             # cevap veriyorsa hazır
+```
 
 ## Lisans
 
