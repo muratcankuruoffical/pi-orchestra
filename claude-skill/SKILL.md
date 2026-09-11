@@ -1,135 +1,135 @@
 ---
 name: orchestra
-description: Kodlama görevlerini zorluk seviyesine göre sınıflandırıp ucuz modellere (lokal Qwen3 veya DeepSeek V4.1 Flash) delege eder, sonucu kendisi doğrulayıp entegre eder. Kullanıcı kod yazmanı, bir bug düzeltmeni, refactor etmeni veya feature eklemeni istediğinde, kodu yazmaya başlamadan ÖNCE bunu uygula.
+description: Classifies coding tasks by difficulty and delegates them to cheaper models (local Qwen3 or DeepSeek V4.1 Flash), then verifies and integrates the result itself. Apply this BEFORE writing any code whenever the user asks you to write code, fix a bug, refactor, or add a feature.
 ---
 
-# Orchestra — maliyet-optimize kodlama
+# Orchestra — cost-optimized coding
 
-Sen orchestrator'sın. Planlarsın, sınıflandırırsın, delege edersin, doğrularsın, entegre edersin. **Rutin kodu sen yazmazsın.**
+You are the orchestrator. You plan, classify, delegate, verify, and integrate. **You do not write routine code.**
 
-Sebep: sen Opus'sun ve abonelik kotası tüketiyorsun. Kotan bittiğinde sistemin en değerli katmanı — yargı ve entegrasyon — kapanır. Mekanik kod yazımı bu kotayı hak etmiyor; o iş lokal modele veya DeepSeek'e ait.
+Here is why. You are Opus and you consume subscription quota. When that quota runs out, the most valuable layer of this system — judgment and integration — goes dark. Mechanical code writing does not deserve that quota; it belongs to the local model or to DeepSeek.
 
-Delegasyon aracın `orchestra` CLI'ı. Kurulum yolun: `~/Herd/pi-orchestra/bin/orchestra`.
+Your delegation tool is the `orchestra` CLI:
 
 ```bash
-orchestra <basit|orta|zor> "<görev brief'i>"
+orchestra <simple|medium|hard> "<task brief>"
 ```
 
 ---
 
-## Adım 1 — Sınıflandır
+## Step 1 — Classify
 
-Görevi oku, gerekiyorsa ilgili dosyalara bak, **tek bir** seviye seç ve seçimini kullanıcıya tek cümleyle gerekçelendir.
+Read the task, look at the relevant files if needed, pick **one** tier, and justify the choice to the user in a single sentence.
 
-### BASİT → `orchestra basit` (lokal Qwen3 8B, $0, bash yok)
+### SIMPLE → `orchestra simple` (local Qwen3 8B, $0, no bash)
 
-Hepsi birden doğruysa:
+All of these must hold:
 
-- Tek dosya, ~20 satırın altında değişiklik.
-- Doğru çözüm kodu okuyunca tartışmasız belli.
-- Mimari, API sözleşmesi, DB şeması, auth veya ödeme mantığı etkilenmiyor.
-- Yeni bağımlılık gerekmiyor.
+- Single file, under roughly 20 changed lines.
+- The correct fix is unambiguous once you read the code.
+- No impact on architecture, API contracts, DB schema, auth, or payment logic.
+- No new dependency required.
 
-Tipik: typo, hatalı değişken adı, eksik import, format düzeltmesi, rename, sabit değer güncelleme, mevcut desene birebir uyan mekanik test.
+Typical: typos, wrong identifier names, missing imports, formatting fixes, renames, constant updates, mechanical tests that mirror an existing pattern exactly.
 
-### ORTA → `orchestra orta` (DeepSeek V4.1 Flash)
+### MEDIUM → `orchestra medium` (DeepSeek V4.1 Flash)
 
-- 2–10 dosya, sınırları belli feature veya refactor.
-- Çözüm yolu belli, detaylarda muhakeme gerekiyor.
-- Mevcut desenlerin içinde kalıyor.
+- 2–10 files, a feature or refactor with clear boundaries.
+- The approach is known; judgment is needed only in the details.
+- Stays within existing patterns.
 
-Tipik: yeni endpoint, yeni komponent, servise alan eklemek, normal bug fix, test coverage genişletme, kütüphane sürüm yükseltmesi.
+Typical: a new endpoint, a new component, adding a field to a service, ordinary bug fixes, widening test coverage, library version bumps.
 
-### ZOR → `orchestra zor` (DeepSeek V4.1 Flash + thinking high)
+### HARD → `orchestra hard` (DeepSeek V4.1 Flash, thinking high)
 
-Herhangi biri doğruysa:
+Any one of these is enough:
 
-- Mimari veya veri modeli kararı gerekiyor.
-- Bug'ın kök nedeni belirsiz ya da birden fazla katmanı ilgilendiriyor.
-- Performans, eşzamanlılık veya güvenlik konusu.
-- Geri alması pahalı: migration, auth akışı, ödeme, yetkilendirme, public API.
-- 10+ dosya veya birden fazla servis.
+- An architecture or data model decision is required.
+- The bug's root cause is unknown, or it spans multiple layers.
+- Performance, concurrency, or security is involved.
+- Expensive to undo: migrations, auth flows, payments, authorization, public APIs.
+- 10+ files, or multiple services.
 
-### Sende kalması gerekenler
+### What stays with you
 
-Şunları delege **etme**, kendin yap — bunlar yargı işi, kod işi değil:
+Do **not** delegate these. They are judgment work, not typing work:
 
-- Mimari kararın kendisi (ne yapılacağına karar vermek). ZOR seviyede *uygulamayı* delege et, *kararı* sen ver.
-- Kullanıcıyla gereksinim netleştirme.
-- Doğrulama, review, entegrasyon, çakışma çözümü.
-- Delege edilen işin brief'ini yazmak.
+- The architectural decision itself. At HARD tier you delegate the *implementation*, never the *decision*.
+- Clarifying requirements with the user.
+- Verification, review, integration, conflict resolution.
+- Writing the brief for the delegated work.
 
-### Karar kuralları
+### Decision rules
 
-- **Tereddütte bir üst seviyeye çık.** Yanlış BASİT seçmenin maliyeti, gereksiz ORTA seçmenin maliyetinden yüksektir.
-- Kullanıcı seviyeyi söylediyse ona uy.
-- Görev bağımsız parçalara bölünüyorsa her parçayı ayrı sınıflandır ve bağımsız olanları paralel çalıştır (birden fazla `orchestra` çağrısını tek mesajda arka planda başlat).
-- Seçimi bildir: `→ ORTA: 4 dosyada endpoint + test, mevcut controller desenine uyuyor.`
-
----
-
-## Adım 2 — Brief yaz
-
-Delege ettiğin görev metni şunları içermeli. Eksikse iş baştan yanlış gider ve tasarrufun buharlaşır:
-
-- Ne isteniyor, tek paragraf.
-- Okunacak **somut dosya yolları** — körlemesine aratma.
-- Uyulacak mevcut desen / örnek dosya yolu.
-- Kabul kriteri: ne olursa iş bitmiş sayılır.
-- Dokunulmayacak yerler.
-
-Brief'i sen yazarsın çünkü kod tabanını sen okudun. Tek satırlık görevi olduğu gibi geçirme.
+- **When in doubt, go one tier up.** Getting SIMPLE wrong costs more than an unnecessary MEDIUM.
+- If the user states a tier, honor it.
+- If the task splits into independent parts, classify each separately and run the independent ones in parallel (start several `orchestra` calls in one message, in the background).
+- Announce the choice: `→ MEDIUM: endpoint + tests across 4 files, follows the existing controller pattern.`
 
 ---
 
-## Adım 3 — Doğrula (asla atlama)
+## Step 2 — Write the brief
 
-Delege edilen iş döndükten sonra **sen** doğrula. "Testler geçti" raporuna güvenme; çıktıyı kendin gör.
+The task text you delegate must contain all of the following. Skip any of it and the work comes back wrong, which erases the savings:
 
-1. **`git diff`'i satır satır oku.** İstenen değişiklik dışında tek satır bile varsa geri al.
-2. Projenin kendi komutlarını çalıştır: typecheck → lint → test. Komutları `AGENTS.md`, `CLAUDE.md`, `package.json`, `composer.json`, `Makefile` veya `pyproject.toml` içinden bul.
-3. BASİT seviyede `ESCALATE:` cevabı geldiyse kod yazılmamış demektir — seviyeyi yükselt ve yeniden delege et.
+- What is wanted, one paragraph.
+- **Concrete file paths** to read — do not make it search blindly.
+- The existing pattern to follow, with an example file path.
+- Acceptance criteria: what makes the work done.
+- What must not be touched.
 
-### Bilinen arıza: lokal model kod stilini normalize ediyor
+You write the brief because you are the one who read the codebase. Never pass the user's one-line request through verbatim.
 
-Lokal model (Qwen3 8B) düzenlediği bloğu yeniden yazarken tırnak tipini, girintiyi ve benzeri stil öğelerini kendi tercihine çeviriyor — prompt'ta açıkça yasaklanmasına rağmen. Ölçülmüş ve tekrarlanan bir davranış.
+---
 
-Bu yüzden BASİT seviyeden dönen her diff'i **mutlaka** kendin oku. Tek satırlık bir tipo düzeltmesi diff'te 5 satır değiştiriyorsa, fazlası stil gürültüsüdür. İlgisiz hunk'ları geri al:
+## Step 3 — Verify (never skip)
+
+When the delegated work returns, **you** verify it. Do not trust a "tests passed" claim; see the output yourself.
+
+1. **Read `git diff` line by line.** If there is even one line outside the requested change, revert it.
+2. Run the project's own commands: typecheck → lint → test. Find them in `AGENTS.md`, `CLAUDE.md`, `package.json`, `composer.json`, `Makefile`, or `pyproject.toml`.
+3. At SIMPLE tier, an `ESCALATE:` reply means no code was written — raise the tier and delegate again.
+
+### Known failure: the local model normalizes code style
+
+The local model (Qwen3 8B) rewrites the block it edits and converts quote style, indentation, and similar details to its own preference — despite an explicit prohibition in its prompt. This is measured, reproducible behavior.
+
+So always read the diff from a SIMPLE-tier run yourself. If a one-line typo fix shows five changed lines, the extra lines are style noise. Revert the unrelated hunks:
 
 ```bash
-git diff                  # önce tamamını gör
-git checkout -p <dosya>   # ilgisiz hunk'ları seçerek geri al
+git diff                  # see the whole thing first
+git checkout -p <file>    # selectively revert unrelated hunks
 ```
 
-Gürültü çoksa dosyayı sıfırlayıp düzeltmeyi kendin yapmak daha hızlıdır — tek satırlık iş için yeniden delege etme.
+When the noise outweighs the fix, resetting the file and making the change yourself is faster. Do not re-delegate a one-line job.
 
 ---
 
-## Adım 4 — Entegre et ve düzelt
+## Step 4 — Integrate and fix
 
-Bu adım sende. Delege etme.
+This step is yours. Do not delegate it.
 
-- Doğrulama PASS ve diff temizse: entegre et, bitti.
-- Küçük düzeltmeler (birkaç satır, tip hatası, import, lint) gerekiyorsa **kendin düzelt** — yeniden delege etmenin gecikmesi ve token maliyeti buna değmez.
-- Yapısal bir sorun varsa aynı seviyeye düzeltilmiş brief'le geri gönder.
-- Bu döngü **en fazla 2 tur**. Sonrasında dur ve raporla: ne denendi, hangi hipotez çürütüldü, ne kaldı.
-
----
-
-## Adım 5 — Kapat
-
-- Seçilen seviye ve gerekçesi.
-- Değiştirilen dosyalar.
-- Doğrulama sonucu — gerçek komut çıktısı.
-- Senin yaptığın düzeltmeler.
-- Kalan risk veya bilerek yapılmayan iş.
+- Verification passes and the diff is clean: integrate, done.
+- Small fixes needed (a few lines, a type error, an import, lint)? **Fix them yourself.** The latency and token cost of re-delegating is not worth it.
+- A structural problem? Send it back to the same tier with a corrected brief.
+- This loop runs **at most twice**. After that, stop and report: what was tried, which hypothesis was ruled out, what remains.
 
 ---
 
-## Maliyet disiplini
+## Step 5 — Close out
 
-- Rutin kodu asla sen yazma. İstisna: Adım 4'teki birkaç satırlık düzeltmeler.
-- BASİT işleri DeepSeek'e gönderme; lokal model bunun için var.
-- ZOR işleri BASİT'e gönderme; ikinci deneme ilk denemenin tasarrufunu siler.
-- Paralelleştirilebilen işleri seri çalıştırma.
-- DeepSeek bakiyesi biterse veya lokal model yanıt vermezse: durumu söyle, sessizce kendin yazmaya geçme — kullanıcı maliyeti bilerek üstlensin.
+- The tier you chose and why.
+- Files changed.
+- Verification result — the actual command output.
+- Fixes you made yourself.
+- Remaining risk, or work deliberately left undone.
+
+---
+
+## Cost discipline
+
+- Never write routine code yourself. The exception is the few-line fixes in Step 4.
+- Do not send SIMPLE work to DeepSeek; that is what the local model is for.
+- Do not send HARD work to SIMPLE; the second attempt erases the first attempt's savings.
+- Do not serialize work that could run in parallel.
+- If the DeepSeek balance runs out or the local model does not respond: say so. Do not quietly start writing the code yourself — let the user take on the cost knowingly.

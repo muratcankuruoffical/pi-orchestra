@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# pi-orchestra kurulumu — idempotent, mevcut ayarları korur.
+# pi-orchestra installer — idempotent, preserves your existing settings.
 #
-#   ./install.sh            normal kurulum
-#   ./install.sh --check    hiçbir şey kurmadan mevcut durumu denetle
+#   ./install.sh            normal install
+#   ./install.sh --check    inspect current state without installing anything
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -17,14 +17,15 @@ CHECK_ONLY=0
 log()  { printf '\033[1m==>\033[0m %s\n' "$*"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$*"; }
 warn() { printf '  \033[33m!\033[0m %s\n' "$*" >&2; }
-die()  { printf '\033[31mHATA:\033[0m %s\n' "$*" >&2; exit 1; }
+die()  { printf '\033[31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
-# ---------------------------------------------------------------- ön koşullar
-command -v jq   >/dev/null || die "jq gerekli: brew install jq"
-command -v node >/dev/null || die "node gerekli"
+# --------------------------------------------------------------- prerequisites
+command -v jq   >/dev/null || die "jq is required: brew install jq"
+command -v node >/dev/null || die "node is required"
 
-# nvm varsa varsayılan sürüme geç: pi, hangi node aktifse onun global paketlerini
-# arar. Yanlış sürümde kurulan paketler "bulunamadı" hatası verir.
+# If nvm is present, switch to the default version: pi looks for its global
+# packages under whichever node is active. Packages installed under a different
+# version produce "module not found" errors.
 if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
   # shellcheck disable=SC1091
   . "$HOME/.nvm/nvm.sh" >/dev/null 2>&1 && nvm use default >/dev/null 2>&1 || true
@@ -32,55 +33,55 @@ fi
 
 NODE_V="$(node -p 'const v=process.versions.node.split("."); `${v[0]}.${String(v[1]).padStart(3,"0")}`')"
 if [[ "$(printf '%s\n22.019\n' "$NODE_V" | sort -V | head -1)" != "22.019" ]]; then
-  die "Node $(node -v) çok eski; pi >= 22.19 istiyor. Çözüm: nvm install 22 --lts && nvm alias default 22"
+  die "Node $(node -v) is too old; pi requires >= 22.19. Fix: nvm install 22 --lts && nvm alias default 22"
 fi
 
 if [[ $CHECK_ONLY -eq 0 ]]; then
-  # ------------------------------------------------------------------ pi + pi-lens
-  # --min-release-age=0: npm'de minimumReleaseAge ayarlıysa pi eski bir sürüme
-  # düşer ve eklentileriyle uyumsuz kalır (pi-ai/compat hatası).
+  # ------------------------------------------------------------- pi + pi-lens
+  # --min-release-age=0: if npm has minimumReleaseAge configured, pi installs at
+  # an older version and becomes incompatible with its extensions (pi-ai/compat).
   NPM_AGE_FLAG=()
   npm install -g --min-release-age=0 --help >/dev/null 2>&1 && NPM_AGE_FLAG=(--min-release-age=0)
 
-  log "pi + pi-lens kuruluyor/güncelleniyor"
+  log "Installing/updating pi + pi-lens"
   npm install -g "${NPM_AGE_FLAG[@]}" @earendil-works/pi-coding-agent pi-lens
   pi list 2>/dev/null | grep -q "npm:pi-lens" || pi install npm:pi-lens >/dev/null
 
-  # ------------------------------------------------------------- ollama + model
+  # -------------------------------------------------------- ollama + local model
   if ! command -v ollama >/dev/null; then
-    log "Ollama kuruluyor"
-    command -v brew >/dev/null || die "Ollama bulunamadı. https://ollama.com/download adresinden kur."
+    log "Installing Ollama"
+    command -v brew >/dev/null || die "Ollama not found. Install it from https://ollama.com/download"
     brew install --cask ollama-app
   fi
 
   if ! ollama list >/dev/null 2>&1; then
-    log "Ollama başlatılıyor"
+    log "Starting Ollama"
     open -a Ollama >/dev/null 2>&1 || (ollama serve >/dev/null 2>&1 &)
     for _ in $(seq 1 30); do ollama list >/dev/null 2>&1 && break; sleep 1; done
-    ollama list >/dev/null 2>&1 || die "Ollama başlatılamadı."
+    ollama list >/dev/null 2>&1 || die "Could not start Ollama."
   fi
 
   if ! ollama list | awk 'NR>1{print $1}' | grep -qx "$LOCAL_MODEL"; then
-    log "$LOCAL_MODEL indiriliyor (~4.7 GB)"
-    # Ağ takılırsa ollama parçalı indirmeyi sürdürür; birkaç kez dene.
+    log "Downloading $LOCAL_MODEL (~5 GB)"
+    # Ollama resumes partial downloads, so a stalled transfer is worth retrying.
     for attempt in 1 2 3; do
       ollama pull "$LOCAL_MODEL" && break
-      warn "indirme kesildi, kaldığı yerden tekrar deneniyor ($attempt/3)"
+      warn "download interrupted, resuming ($attempt/3)"
     done
     ollama list | awk 'NR>1{print $1}' | grep -qx "$LOCAL_MODEL" \
-      || die "$LOCAL_MODEL indirilemedi. Ağı değiştirip 'ollama pull $LOCAL_MODEL' ile sürdür."
+      || die "Could not download $LOCAL_MODEL. Switch networks and resume with: ollama pull $LOCAL_MODEL"
   fi
 
-  # Ollama'nın varsayılan num_ctx'i (4K) kod işleri için çok küçük.
+  # Ollama's default num_ctx (4K) is far too small for code work.
   if ! ollama list | awk 'NR>1{print $1}' | grep -q "^$LOCAL_ALIAS"; then
-    log "$LOCAL_ALIAS oluşturuluyor (num_ctx=32768)"
+    log "Creating $LOCAL_ALIAS (num_ctx=32768)"
     MF="$(mktemp -t orchestra-modelfile)"
     printf 'FROM %s\nPARAMETER num_ctx 32768\n' "$LOCAL_MODEL" > "$MF"
     ollama create "$LOCAL_ALIAS" -f "$MF"
     rm -f "$MF"
   fi
 
-  # --------------------------------------------------------------- pi ayarları
+  # ------------------------------------------------------------- pi settings
   mkdir -p "$PI_DIR"
   [[ -f "$MODELS"   ]] || echo '{}' > "$MODELS"
   [[ -f "$SETTINGS" ]] || echo '{}' > "$SETTINGS"
@@ -93,52 +94,52 @@ if [[ $CHECK_ONLY -eq 0 ]]; then
     | .packages        = ((.packages     // []) + ["npm:pi-lens"] | unique)
     | .enabledModels   = ((.enabledModels // []) + ["deepseek/*", "ollama/*"] | unique)
   ' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
-  log "pi ayarları güncellendi"
+  log "pi settings updated"
 
-  # ------------------------------------------------ orchestra CLI + Claude skill
+  # ------------------------------------------- orchestra CLI + Claude Code skill
   mkdir -p "$HOME/.local/bin" "$HOME/.claude/skills"
   ln -sfn "$REPO/bin/orchestra"  "$HOME/.local/bin/orchestra"
   ln -sfn "$REPO/claude-skill"   "$HOME/.claude/skills/orchestra"
-  log "orchestra CLI ve Claude Code skill'i bağlandı"
+  log "Linked orchestra CLI and Claude Code skill"
 fi
 
-# -------------------------------------------------------------------- denetim
+# ---------------------------------------------------------------------- status
 echo
-log "Durum"
+log "Status"
 
-command -v pi >/dev/null && ok "pi $(pi --version)" || warn "pi bulunamadı"
+command -v pi >/dev/null && ok "pi $(pi --version)" || warn "pi not found"
 command -v claude >/dev/null \
-  && ok "Claude Code $(claude --version 2>/dev/null | head -1) — orchestrator katmanı" \
-  || warn "Claude Code CLI yok. Orchestrator katmanı bu; https://claude.com/claude-code"
+  && ok "Claude Code $(claude --version 2>/dev/null | head -1) — the orchestrator layer" \
+  || warn "Claude Code CLI missing. It is the orchestrator; see https://claude.com/claude-code"
 
 if ollama list >/dev/null 2>&1; then
   if ollama list | awk 'NR>1{print $1}' | grep -q "^$LOCAL_ALIAS"; then
-    ok "lokal model hazır ($LOCAL_ALIAS, 32K context)"
+    ok "local model ready ($LOCAL_ALIAS, 32K context)"
   else
-    warn "lokal model yok. './install.sh' ile kur."
+    warn "local model missing. Run ./install.sh"
   fi
 else
-  warn "Ollama çalışmıyor. 'open -a Ollama' ya da 'ollama serve'"
+  warn "Ollama is not running. Try: open -a Ollama  (or: ollama serve)"
 fi
 
 if [[ -n "${DEEPSEEK_API_KEY:-}" ]] || jq -e '.deepseek' "$PI_DIR/auth.json" >/dev/null 2>&1; then
-  ok "DeepSeek anahtarı bağlı"
+  ok "DeepSeek key configured"
 else
-  warn "DeepSeek anahtarı yok → ORTA/ZOR katmanları çalışmaz. 'pi' içinde /login → DeepSeek"
+  warn "No DeepSeek key → MEDIUM/HARD tiers will not work. Run 'pi', then /login → DeepSeek"
 fi
 
 case ":$PATH:" in
-  *":$HOME/.local/bin:"*) ok "orchestra PATH'te" ;;
-  *) warn "~/.local/bin PATH'te değil. Profiline ekle: export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
+  *":$HOME/.local/bin:"*) ok "orchestra is on PATH" ;;
+  *) warn "~/.local/bin is not on PATH. Add to your profile: export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
 esac
 
 [[ -e "$HOME/.claude/skills/orchestra/SKILL.md" ]] \
-  && ok "Claude Code skill'i kurulu" \
-  || warn "skill bağlanmamış: ~/.claude/skills/orchestra"
+  && ok "Claude Code skill installed" \
+  || warn "skill not linked: ~/.claude/skills/orchestra"
 
 echo
 if [[ $CHECK_ONLY -eq 1 ]]; then
-  log "Denetim bitti (hiçbir şey değiştirilmedi)."
+  log "Check complete (nothing was modified)."
 else
-  log "Kurulum bitti. Bir proje klasöründe 'claude' çalıştır ve normal konuş."
+  log "Done. Run 'claude' in a project directory and talk to it normally."
 fi

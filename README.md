@@ -1,31 +1,31 @@
 # pi-orchestra
 
-Maliyet-optimize, çok katmanlı kodlama sistemi. **Claude Code** orchestrator olarak çalışır, rutin kodu ucuz modellere delege eder, sonucu kendisi doğrulayıp entegre eder.
+A cost-optimized, multi-tier coding system. **Claude Code** acts as the orchestrator, delegates routine code to cheaper models, then verifies and integrates the result itself.
 
-Fikir basit: **yargı pahalı, kod yazımı ucuz.** Opus'un asıl değeri planlamak, sınıflandırmak, doğrulamak ve entegre etmek. Mekanik kod yazımı bu kotayı hak etmiyor — o iş lokal modele veya DeepSeek'e ait.
+The idea is simple: **judgment is expensive, typing is cheap.** Opus earns its keep by planning, classifying, verifying, and integrating. Mechanical code writing does not deserve that quota — it belongs to a local model or to DeepSeek.
 
 ```
                   ORCHESTRATOR
               Claude Code / Opus 5
-              (abonelik, $0 marjinal)
+            (subscription, $0 marginal)
                        │
-                görev zorluğunu belirle
+                 classify difficulty
                        │
       ┌────────────────┼─────────────────┐
       ▼                ▼                 ▼
-    BASİT             ORTA               ZOR
+    SIMPLE           MEDIUM             HARD
       │                │                 │
       ▼                ▼                 ▼
- orchestra basit  orchestra orta   orchestra zor
- Qwen3 8B         DeepSeek         DeepSeek V4.1
- 7B (lokal, $0)   V4.1 Flash       Flash, thinking:high
+ orchestra simple  orchestra medium  orchestra hard
+ Qwen3 8B          DeepSeek          DeepSeek V4.1
+ (local, $0)       V4.1 Flash        Flash, thinking:high
       │                │                 │
- typo / küçük     feature /         mimari /
- bug / test       refactor          karmaşık bug
+ typo / small     feature /         architecture /
+ bug / test       refactor          complex bug
       │                │                 │
       └────────────────┼─────────────────┘
                        ▼
-                 INTEGRATION
+                  INTEGRATION
               Claude Code / Opus 5
                        │
            git diff → typecheck → lint → test
@@ -34,220 +34,224 @@ Fikir basit: **yargı pahalı, kod yazımı ucuz.** Opus'un asıl değeri planla
                   ▼         ▼
                 PASS       FAIL
                   │         │
-                 DONE   düzelt / yeniden delege
-                            (en fazla 2 tur)
+                 DONE   fix / re-delegate
+                            (max 2 rounds)
 ```
 
-## Neden bu kombinasyon
+## Why this combination
 
-| Katman | Nerede çalışır | Maliyet |
+| Layer | Runs on | Cost |
 |---|---|---|
-| Orchestrator + planner | Claude Code, Opus 5 | **$0 marjinal** (abonelik) |
-| BASİT | Ollama, Qwen3 8B | **$0** |
-| ORTA / ZOR | DeepSeek V4.1 Flash (`deepseek-flash`) | ~$0.15 / $0.60 per M |
-| Integration + review + fix | Claude Code, Opus 5 | **$0 marjinal** (abonelik) |
+| Orchestrator + planner | Claude Code, Opus 5 | **$0 marginal** (subscription) |
+| SIMPLE | Ollama, Qwen3 8B | **$0** |
+| MEDIUM / HARD | DeepSeek V4.1 Flash (`deepseek-flash`) | ~$0.15 / $0.60 per M |
+| Integration + review + fix | Claude Code, Opus 5 | **$0 marginal** (subscription) |
 
-Tek gerçek para harcaması DeepSeek. Tipik bir feature (≈200K in / 20K out) **~$0.04**.
+DeepSeek is the only real cash spend. A typical feature (≈200K in / 20K out) costs about **$0.04**.
 
-### Neden pi'ye Anthropic ile giriş yapmıyoruz
+### Why we do not log into pi with Anthropic
 
-pi'nin `/login` ile Claude Pro/Max girişi, kullanımı plan limitlerinden değil **"extra usage"dan** düşer ve token başına faturalanır. Bu yüzden Opus katmanı pi'nin içinde değil, **Claude Code'un kendisinde** duruyor. pi yalnızca ucuz modelleri koşturan bir yürütücü.
+Logging into pi with a Claude Pro/Max account bills usage as **extra usage**, per token, rather than against your plan limits. That is why the Opus layer lives in Claude Code itself rather than inside pi. pi is only an executor for the cheap models.
 
-### Gerçek kısıt: kota
+### The real constraint: quota
 
-Opus katmanının para maliyeti yok ama **plan kotası** tüketiyor. Skill bunu bilerek yazıldı: rutin kod yazımı delege edilir, yargı ve entegrasyon Opus'ta kalır. `claude` içinde `/usage` ile kotanı izle.
+The Opus layer costs no money but it does consume **plan quota**. The skill is written with that in mind: routine code writing is delegated, judgment and integration stay with Opus. Track it with `/usage` inside `claude`.
 
-## Kurulum
+## Install
 
 ```bash
 git clone https://github.com/endigitals/pi-orchestra ~/pi-orchestra
 cd ~/pi-orchestra && ./install.sh
 ```
 
-Sonra DeepSeek anahtarını bağla:
+Then connect your DeepSeek key:
 
 ```bash
-pi          # → /login → DeepSeek → anahtarı yapıştır
+pi          # → /login → DeepSeek → paste the key
 ```
 
-Her şeyin yerinde olduğunu doğrula:
+Verify everything is in place:
 
 ```bash
 ./install.sh --check
 ```
 
 ```
-==> Durum
+==> Status
   ✓ pi 0.85.1
-  ✓ Claude Code 2.1.268 — orchestrator katmanı
-  ✓ lokal model hazır (qwen3-local, 32K context)
-  ✓ DeepSeek anahtarı bağlı
-  ✓ orchestra PATH'te
-  ✓ Claude Code skill'i kurulu
+  ✓ Claude Code 2.1.268 — the orchestrator layer
+  ✓ local model ready (qwen3-local, 32K context)
+  ✓ DeepSeek key configured
+  ✓ orchestra is on PATH
+  ✓ Claude Code skill installed
 ```
 
-`--check` hiçbir şey kurmaz, sadece denetler. Kurulumdan sonra bir şey bozulursa ilk buraya bak.
+`--check` installs nothing; it only inspects. When something breaks later, start here.
 
-`install.sh` idempotenttir ve mevcut ayarlarını ezmez:
+The installer is idempotent and does not overwrite your existing settings. It:
 
-- `pi` + `pi-lens` kurar (npm'in `minimumReleaseAge` kapısını aşarak)
-- Ollama'yı kurar, `qwen3:8b` indirir, 32K context'li `qwen3-local` alias'ını oluşturur
-- `~/.pi/agent/models.json`'a `ollama` provider'ını ve `deepseek-flash` modelini ekler
-- `bin/orchestra`'yı `~/.local/bin/` altına, skill'i `~/.claude/skills/orchestra`'ya linkler
+- installs `pi` and `pi-lens` (bypassing npm's `minimumReleaseAge` gate)
+- installs Ollama, downloads `qwen3:8b`, creates the 32K-context `qwen3-local` alias
+- adds the `ollama` provider and the `deepseek-flash` model to `~/.pi/agent/models.json`
+- links `bin/orchestra` into `~/.local/bin/` and the skill into `~/.claude/skills/orchestra`
 
-### Gereksinimler
+### Requirements
 
-- **Claude Code** — kurulu ve login olmuş (orchestrator bu)
-- Node **≥ 22.19** (pi şartı)
+- **Claude Code** — installed and logged in (this is the orchestrator)
+- Node **≥ 22.19** (pi's requirement)
 - `jq`, Homebrew
-- ~5 GB disk, ≥16 GB RAM (lokal model için)
+- ~6 GB disk, ≥16 GB RAM (for the local model)
 
-## Kullanım
+## Usage
 
-Herhangi bir proje klasöründe `claude` çalıştır ve normal konuş:
-
-```
-auth middleware'e rate limiting ekle
-```
-
-`orchestra` skill'i devreye girer, Claude seviyeyi belirler, delege eder, doğrular, entegre eder ve ne yaptığını raporlar.
-
-Seviyeyi kendin de dayatabilirsin: *"bunu lokalde yap"*, *"bu zor bir iş"*.
-
-### Tipik bir oturum
+Run `claude` in any project directory and talk to it normally:
 
 ```
-> auth middleware'e rate limiting ekle
+add rate limiting to the auth middleware
+```
 
-→ ORTA: 3 dosya (middleware, config, test), mevcut middleware desenine uyuyor.
+The `orchestra` skill takes over: Claude picks the tier, delegates, verifies, integrates, and reports what it did.
+
+You can also force a tier: *"do this locally"*, *"this one is hard"*.
+
+### What a session looks like
+
+```
+> add rate limiting to the auth middleware
+
+→ MEDIUM: 3 files (middleware, config, test), follows the existing middleware pattern.
   [orchestra] ds-worker → deepseek/deepseek-flash (thinking=off)
 
-  Değişen: app/Http/Middleware/RateLimit.php (yeni), config/auth.php, tests/Feature/RateLimitTest.php
-  Doğrulama: php artisan test --filter=RateLimit → 4 passed
-  Entegrasyon: config/auth.php içindeki anahtar adını mevcut adlandırmaya çevirdim.
-  Kalan risk: Redis store varsayıldı; file cache kullanıyorsan limit süreci başına olur.
+  Changed: app/Http/Middleware/RateLimit.php (new), config/auth.php, tests/Feature/RateLimitTest.php
+  Verified: php artisan test --filter=RateLimit → 4 passed
+  Integration: renamed the config key to match the existing convention.
+  Remaining risk: assumes a Redis store; with a file cache the limit becomes per-process.
 ```
 
-Opus sınıflandırdı, DeepSeek yazdı, Opus doğrulayıp entegre etti. Tek para harcaması DeepSeek tarafında, birkaç sent.
+Opus classified, DeepSeek wrote, Opus verified and integrated. The only cash spend was a few cents on the DeepSeek side.
 
-### Ne zaman ne olur
+### What goes where
 
-| Sen ne dersin | Ne olur |
+| You say | What happens |
 |---|---|
-| "şu değişken adı yanlış, düzelt" | BASİT → lokal model, $0 |
-| "bu endpoint'e filtreleme ekle" | ORTA → DeepSeek |
-| "ödeme akışında race condition var" | ZOR → DeepSeek + thinking high, Opus kararı verir |
-| "bu mimariyi nasıl kurmalıyız?" | Delege edilmez — saf yargı işi, Opus'ta kalır |
-| "testleri çalıştır" | Delege edilmez — Opus kendisi koşturur |
+| "this variable name is wrong, fix it" | SIMPLE → local model, $0 |
+| "add filtering to this endpoint" | MEDIUM → DeepSeek |
+| "there's a race condition in the payment flow" | HARD → DeepSeek + thinking high, Opus makes the call |
+| "how should we structure this?" | Not delegated — pure judgment, stays with Opus |
+| "run the tests" | Not delegated — Opus runs them itself |
 
-### CLI'ı elle kullanmak
+### Using the CLI directly
 
 ```bash
-orchestra basit "src/utils/date.ts içindeki formatDate'de tipo var, düzelt"
-orchestra orta  "POST /api/invoices endpoint'i ekle, app/Http/Controllers/OrderController.php desenine uy"
-orchestra zor   "Sipariş listesi N+1 sorgu üretiyor, kök nedeni bul ve çöz"
+orchestra simple "Fix the typo in formatDate in src/utils/date.ts"
+orchestra medium "Add a POST /api/invoices endpoint following app/Http/Controllers/OrderController.php"
+orchestra hard   "The order list issues N+1 queries; find the root cause and fix it"
 
-orchestra basit --dry-run "..."     # hangi model seçilecek, çalıştırmadan gör
-orchestra orta --cwd ~/proje "..."  # başka dizinde çalıştır
+orchestra simple --dry-run "..."     # see which model would run, without running it
+orchestra medium --cwd ~/project "..."
 ```
 
-## Kotanı ve maliyetini izlemek
+When the working directory is a git repository, `orchestra` prints the resulting diff automatically.
+
+## Tracking quota and cost
 
 ```bash
-# Claude abonelik kotası — orchestrator + integration bunu tüketir
-claude    # içeride: /usage
+# Claude subscription quota — consumed by the orchestrator and integration layers
+claude    # then: /usage
 
-# DeepSeek harcaması
+# DeepSeek spend
 open https://platform.deepseek.com/usage
 ```
 
-Kota %80'i geçtiyse: ORTA işleri de lokale zorlamak yerine, ZOR işleri ertele ve BASİT'leri lokalde biriktir. Orchestrator'ın kendisi Opus olduğu için her oturumun bir taban maliyeti var.
+Past 80% quota, do not push MEDIUM work down to the local model — instead postpone HARD work and batch up SIMPLE tasks locally. The orchestrator itself is Opus, so every session carries a baseline cost.
 
-## Sınıflandırma rubriği
+## Classification rubric
 
-Tam kurallar `claude-skill/SKILL.md` içinde. Özet:
+Full rules live in `claude-skill/SKILL.md`. In short:
 
-**BASİT** — hepsi doğruysa: tek dosya, ~20 satır altı, doğru çözüm tartışmasız belli, mimari/API/şema/auth/ödeme etkilenmiyor, yeni bağımlılık yok.
+**SIMPLE** — all must hold: single file, under ~20 lines, the correct fix is unambiguous, no impact on architecture/API/schema/auth/payments, no new dependency.
 
-**ORTA** — 2–10 dosya, sınırları belli feature veya refactor, mevcut desenlerin içinde.
+**MEDIUM** — 2–10 files, a feature or refactor with clear boundaries, within existing patterns.
 
-**ZOR** — herhangi biri doğruysa: mimari karar, kök nedeni belirsiz bug, performans/concurrency/güvenlik, geri alması pahalı (migration, auth, ödeme, public API), 10+ dosya.
+**HARD** — any one suffices: an architecture decision, an unclear root cause, performance/concurrency/security, expensive to undo (migrations, auth, payments, public API), 10+ files.
 
-Kural: **tereddütte bir üst seviyeye çık.**
+Rule of thumb: **when in doubt, go one tier up.**
 
-Orchestrator'da kalması gerekenler — bunlar delege edilmez: mimari kararın kendisi, gereksinim netleştirme, doğrulama, review, entegrasyon, brief yazımı.
+What stays with the orchestrator and is never delegated: the architectural decision itself, requirement clarification, verification, review, integration, and writing the brief.
 
-## Proje bazlı bağlam
+## Per-project context
 
-Projenin köküne `AGENTS.md` koy; hem Claude Code hem pi okur. Şablon: `examples/AGENTS.example.md`. Doğrulama komutlarını, örnek alınacak desen dosyalarını ve "buraya dokunulursa ZOR seviyedir" alanlarını yazmak sınıflandırma kalitesini belirgin artırır.
+Put an `AGENTS.md` at the project root; both Claude Code and pi read it. Template: `examples/AGENTS.example.md`. Recording the verification commands, the pattern files worth imitating, and the "touching this means HARD tier" areas measurably improves classification quality.
 
-## Yapı
+## Layout
 
 ```
-claude-skill/SKILL.md   Claude Code orchestrator skill'i (rubrik + protokol)
-bin/orchestra           delegasyon CLI'ı — seviye → model + sistem promptu
+claude-skill/SKILL.md   Claude Code orchestrator skill (rubric + protocol)
+bin/orchestra           delegation CLI — tier → model + system prompt
 agents/
-  local-coder.md        BASİT  → ollama/qwen3-local, bash YOK, ESCALATE protokolü
-  ds-worker.md          ORTA   → deepseek/deepseek-flash, thinking off
-  ds-architect.md       ZOR    → deepseek/deepseek-flash, thinking high
-config/models.json      ollama provider + deepseek-flash tanımı
-examples/               AGENTS.md ve proje ayarı şablonları
+  local-coder.md        SIMPLE → ollama/qwen3-local, no bash, ESCALATE protocol
+  ds-worker.md          MEDIUM → deepseek/deepseek-flash, thinking off
+  ds-architect.md       HARD   → deepseek/deepseek-flash, thinking high
+config/models.json      ollama provider + deepseek-flash definition
+examples/               AGENTS.md and project settings templates
 install.sh
 ```
 
-## Tasarım kararları
+## Design decisions
 
-**Lokal model Qwen3 8B, Qwen2.5-Coder değil.** Qwen2.5-Coder 7B kod kalitesi olarak daha iyi (HumanEval %88) ama **araç çağıramıyor**: Ollama'nın şablonu `<tool_call>` etiketleri istemesine rağmen model düz JSON yazıyor, dolayısıyla hiçbir dosya düzenlemesi gerçekleşmiyor. Doğrudan Ollama API'sine atılan istekle doğrulandı. Qwen3 8B native `tool_calls` üretiyor; agentic akış için kod kalitesinden önce bu şart.
+**The local model is Qwen3 8B, not Qwen2.5-Coder.** Qwen2.5-Coder 7B writes better code (88% HumanEval) but **cannot call tools**: although Ollama's template asks for `<tool_call>` tags, the model emits bare JSON, so no file edit ever happens. Verified by hitting the Ollama API directly — neither the base model nor a num_ctx alias returns `tool_calls`. Qwen3 emits them natively. In an agentic loop, being able to call tools comes before code quality.
 
-**Lokal modelin `bash`'i yok.** 7B model + kabuk erişimi istenmeyen bir kombinasyon. `local-coder` kapsamı aşan iş geldiğinde kod yazmak yerine `ESCALATE: <neden>` döndürür; orchestrator bunu görünce seviyeyi yükseltir.
+**The local model has no `bash`.** A small model plus shell access is a combination worth avoiding. When the work exceeds its scope, `local-coder` returns `ESCALATE: <reason>` instead of writing code, and the orchestrator raises the tier.
 
-**Doğrulamayı her zaman orchestrator yapar.** "Testler geçti" raporuna güvenmek bu mimarideki en kolay kırılma noktası. Komutu Opus çalıştırır ve çıktıyı kendisi görür.
+**Verification always belongs to the orchestrator.** Trusting a "tests passed" claim is the easiest way for this architecture to break. Opus runs the command and reads the output itself.
 
-**Düzeltme döngüsü 2 turla sınırlı.** Sonrasında sistem durur ve durumu raporlar — sonsuz döngüde kota ve para yakmaz.
+**`orchestra` prints the diff itself.** The local model normalizes code style (quote characters, indentation) beyond the requested change, and no amount of prompting stopped it — it even reports that it changed nothing else. So the defense is mechanical rather than a matter of trusting the model: the diff always lands in front of the orchestrator.
 
-**Küçük düzeltmeler delege edilmez.** Birkaç satırlık tip/import/lint düzeltmesi için yeniden delegasyonun gecikmesi tasarrufa değmez; orchestrator kendisi yapar.
+**The fix loop is capped at 2 rounds.** After that the system stops and reports, rather than burning quota and money in a loop.
 
-## Sorun giderme
+**Small fixes are not delegated.** Re-delegating a three-line type or import fix costs more in latency than it saves; the orchestrator does it itself.
 
-Önce her zaman `./install.sh --check`.
+## Troubleshooting
+
+Always start with `./install.sh --check`.
 
 **`Cannot find module '.../pi-ai/dist/index.js/compat'`**
 
-npm'de `minimumReleaseAge` ayarlıysa `npm install -g @earendil-works/pi-coding-agent` pi'yi eski bir sürüme düşürür ve eklentileriyle uyumsuz kalır.
+If npm has `minimumReleaseAge` configured, `npm install -g @earendil-works/pi-coding-agent` installs an older pi that is incompatible with its extensions.
 
 ```bash
 npm install -g --min-release-age=0 @earendil-works/pi-coding-agent pi-lens
 ```
 
-**`pi list` boş / paketler bulunamıyor**
+**`pi list` is empty / packages not found**
 
-`pi`, hangi node sürümü aktifse onun global dizinine bakar. nvm ile sürüm değiştirdiysen paketleri o sürüm altında yeniden kur. `install.sh` başlangıçta `nvm use default` yapar.
+pi looks under whichever node version is active. If you switched versions with nvm, reinstall the packages under that version. `install.sh` runs `nvm use default` at startup.
 
-**`Agent tanımı yok: .../agents/local-coder.md`**
+**`Agent definition not found: .../agents/local-coder.md`**
 
-`orchestra` repo kökünü symlink'i çözerek bulur. Repo'yu taşıdıysan `./install.sh` ile symlink'leri yenile.
+`orchestra` resolves the repo root through its symlink. If you moved the repo, re-run `./install.sh` to refresh the links.
 
-**Lokal model indirmesi takılıyor**
+**The local model download stalls**
 
-Ollama parçalı indirir ve kaldığı yerden devam eder; ilerleme durursa ağı değiştirip tekrar çalıştır:
+Ollama downloads in parts and resumes where it left off. If progress stops, switch networks and run:
 
 ```bash
 ollama pull qwen3:8b
 ```
 
-İlerlemeyi `du -k ~/.ollama/models/blobs/*-partial` ile izle — dosya önceden ayrıldığı için `ls -lh` boyutu sabit görünür, gerçek ilerleme ayrılmış blok sayısındadır.
+Track progress with `du -k ~/.ollama/models/blobs/*-partial` — the file is preallocated, so `ls -lh` shows a constant size; real progress is in the allocated block count.
 
 **DeepSeek `Insufficient Balance` (HTTP 402)**
 
-Anahtar doğru ama bakiye yok. `platform.deepseek.com` üzerinden yükle. Geçersiz model id'si 404 döner, 402 değil — bu ikisini karıştırma.
+The key is valid but the balance is empty; top up at `platform.deepseek.com`. Note that an invalid model id returns 404, not 402 — do not confuse the two.
 
-**Ollama çalışmıyor**
+**Ollama is not running**
 
 ```bash
-open -a Ollama          # ya da: ollama serve
-ollama list             # cevap veriyorsa hazır
+open -a Ollama          # or: ollama serve
+ollama list             # if this answers, it is ready
 ```
 
-## Lisans
+## License
 
 MIT

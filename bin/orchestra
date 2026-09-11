@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# orchestra — bir kodlama görevini seviyesine uygun ucuz modele delege eder.
+# orchestra — delegate a coding task to the cheapest model that can do it.
 #
-#   orchestra <basit|orta|zor> "<görev>"
-#   orchestra basit "src/utils/date.ts içindeki formatDate'de tipo var, düzelt"
+#   orchestra <simple|medium|hard> "<task>"
+#   orchestra simple "Fix the typo in formatDate in src/utils/date.ts"
 #
-# Claude Code orchestrator olarak bu script'i çağırır; kodu ucuz model yazar,
-# doğrulamayı ve review'ı Claude Code kendisi yapar.
+# Claude Code calls this as the orchestrator: the cheap model writes the code,
+# Claude Code verifies and integrates it.
 set -euo pipefail
 
-# ~/.local/bin/orchestra bir symlink olabilir; gerçek repo kökünü bulmak için zinciri çöz
+# ~/.local/bin/orchestra may be a symlink; resolve the chain to find the repo root.
 SELF="${BASH_SOURCE[0]}"
 while [[ -L "$SELF" ]]; do
   TARGET="$(readlink "$SELF")"
@@ -18,16 +18,16 @@ REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 
 usage() {
   cat >&2 <<'U'
-Kullanım: orchestra <seviye> "<görev>"
+Usage: orchestra <tier> "<task>"
 
-Seviyeler:
-x
-  orta  | medium    DeepSeek V4.1 Flash                — thinking off
-  zor   | hard      DeepSeek V4.1 Flash, thinking high
+Tiers:
+  simple    Qwen3 8B (local, $0)              — no bash, edits files only
+  medium    DeepSeek V4.1 Flash               — thinking off
+  hard      DeepSeek V4.1 Flash, thinking high
 
-Seçenekler:
-  --cwd <dir>       Çalışma dizini (varsayılan: mevcut dizin)
-  --dry-run         Çalıştırmadan komutu yazdır
+Options:
+  --cwd <dir>       Working directory (default: current directory)
+  --dry-run         Print the resolved configuration without running
 U
   exit 2
 }
@@ -46,39 +46,41 @@ done
 
 [[ -n "$TASK" ]] || usage
 
+# Turkish aliases (basit/orta/zor) are accepted but undocumented.
 case "$TIER" in
-  basit|simple|1)
+  simple|basit|1)
     MODEL="ollama/qwen3-local"; THINK="off"; AGENT="local-coder"
-    TOOLS="read,grep,find,ls,edit,write"   # bash yok: 7B model + kabuk istenmez
+    TOOLS="read,grep,find,ls,edit,write"   # no bash: a small model plus a shell is a bad combination
     ;;
-  orta|medium|2)
+  medium|orta|2)
     MODEL="deepseek/deepseek-flash"; THINK="off"; AGENT="ds-worker"; TOOLS=""
     ;;
-  zor|hard|3)
+  hard|zor|3)
     MODEL="deepseek/deepseek-flash"; THINK="high"; AGENT="ds-architect"; TOOLS=""
     ;;
-  *) echo "Bilinmeyen seviye: $TIER" >&2; usage ;;
+  *) echo "Unknown tier: $TIER" >&2; usage ;;
 esac
 
 SYSFILE="$REPO/agents/$AGENT.md"
-[[ -f "$SYSFILE" ]] || { echo "Agent tanımı yok: $SYSFILE" >&2; exit 1; }
+[[ -f "$SYSFILE" ]] || { echo "Agent definition not found: $SYSFILE" >&2; exit 1; }
 
-# nvm kullanılıyorsa pi'nin gerektirdiği node sürümüne geç (pi-subagents >=22.19)
-if ! command -v pi >/dev/null 2>&1 || [[ "$(node -e 'const[a,b]=process.versions.node.split(".");process.stdout.write(a+"."+String(b).padStart(3,"0"))' 2>/dev/null)" < "22.019" ]]; then
+# Switch to the node version pi needs (>= 22.19) when nvm is in use.
+if ! command -v pi >/dev/null 2>&1 || [[ "$(node -e 'const v=process.versions.node.split(".");process.stdout.write(v[0]+"."+String(v[1]).padStart(3,"0"))' 2>/dev/null)" < "22.019" ]]; then
   # shellcheck disable=SC1090
   [[ -s "$HOME/.nvm/nvm.sh" ]] && . "$HOME/.nvm/nvm.sh" && nvm use default >/dev/null 2>&1 || true
 fi
-command -v pi >/dev/null || { echo "pi bulunamadı. install.sh çalıştır." >&2; exit 1; }
+command -v pi >/dev/null || { echo "pi not found. Run install.sh." >&2; exit 1; }
 
-# YAML frontmatter'ı at, sistem promptu olarak gövdeyi kullan
+# Strip the YAML frontmatter; the body is the system prompt.
 SYSTEM="$(awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n>=2' "$SYSFILE")"
 
-# Sistem promptu modu katmana göre değişir:
-#   BASİT  → replace. Lokal model gecikme darboğazı; pi'nin büyük varsayılan
-#            promptunu işlemek 8B'de süreyi ikiye katlıyor (136s → 58s ölçüldü).
-#            Qwen3 native tool_calls ürettiği için o scaffolding'e ihtiyaç yok.
-#   ORTA/ZOR → append. Güçlü modellerde darboğaz gecikme değil kalite;
-#            pi'nin dosya düzenleme ve proje bağlamı disiplini korunsun.
+# System prompt mode differs by tier:
+#   SIMPLE      -> replace. The local model is latency-bound; processing pi's large
+#                  default prompt doubles the run time on an 8B model (measured
+#                  136s -> 58s). Qwen3 emits native tool_calls, so that scaffolding
+#                  is not needed.
+#   MEDIUM/HARD -> append. Strong models are quality-bound, not latency-bound;
+#                  keep pi's file-editing and project-context discipline.
 if [[ "$AGENT" == "local-coder" ]]; then
   ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --system-prompt "$SYSTEM")
 else
@@ -87,16 +89,15 @@ fi
 [[ -n "$TOOLS" ]] && ARGS+=(--tools "$TOOLS")
 
 if [[ $DRY -eq 1 ]]; then
-  printf 'cwd=%s\nmodel=%s thinking=%s agent=%s tools=%s\n' "$CWD" "$MODEL" "$THINK" "$AGENT" "${TOOLS:-<hepsi>}"
+  printf 'cwd=%s\nmodel=%s thinking=%s agent=%s tools=%s\n' "$CWD" "$MODEL" "$THINK" "$AGENT" "${TOOLS:-<all>}"
   exit 0
 fi
 
 printf '\033[2m[orchestra] %s → %s (thinking=%s)\033[0m\n' "$AGENT" "$MODEL" "$THINK" >&2
 cd "$CWD"
 
-# Değişiklik öncesi durumu kaydet ki sonunda gerçekten ne değiştiğini gösterebilelim.
-# Lokal model istenmeyen stil normalizasyonu yapmaya eğilimli; diff'i otomatik
-# yazdırmak orchestrator'ın bunu gözden kaçırmasını engelliyor.
+# The local model tends to normalize code style beyond the requested change.
+# Printing the diff automatically keeps that from slipping past the orchestrator.
 IS_GIT=0; git rev-parse --git-dir >/dev/null 2>&1 && IS_GIT=1
 
 set +e
@@ -107,11 +108,11 @@ set -e
 if [[ $IS_GIT -eq 1 ]]; then
   CHANGED="$(git diff --stat 2>/dev/null | tail -1)"
   if [[ -n "$CHANGED" ]]; then
-    printf '\n\033[1m[orchestra] değişiklikler:\033[0m %s\n' "$CHANGED" >&2
+    printf '\n\033[1m[orchestra] changes:\033[0m %s\n' "$CHANGED" >&2
     git --no-pager diff >&2
-    printf '\033[2m[orchestra] istenen değişiklik dışında satır varsa geri al: git checkout -p <dosya>\033[0m\n' >&2
+    printf '\033[2m[orchestra] revert anything outside the requested change: git checkout -p <file>\033[0m\n' >&2
   else
-    printf '\n\033[33m[orchestra] hiçbir dosya değişmedi.\033[0m\n' >&2
+    printf '\n\033[33m[orchestra] no files were changed.\033[0m\n' >&2
   fi
 fi
 

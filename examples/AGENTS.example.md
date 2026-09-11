@@ -1,33 +1,33 @@
-# Proje bağlamı
+# Project context
 
-Bu dosya `pi` tarafından otomatik yüklenir ve her subagent'a aktarılır.
-Orchestrator'ın doğru sınıflandırma yapabilmesi için burayı doldur.
+This file is loaded automatically by pi and Claude Code, and passed to every subagent.
+Fill it in so the orchestrator can classify work correctly.
 
 ## Stack
 
-<!-- örn: Laravel 11 + Inertia + React 18 + TypeScript, MySQL 8, Redis -->
+<!-- e.g. Laravel 11 + Inertia + React 18 + TypeScript, MySQL 8, Redis -->
 
-## Doğrulama komutları
+## Verification commands
 
-<!-- orchestrator bunları çalıştıracak -->
+<!-- the orchestrator will run these -->
 - typecheck: `npm run typecheck`
 - lint: `npm run lint`
 - test: `npm test`
 
-## Desenler
+## Patterns
 
-<!-- Yeni kod yazılırken örnek alınacak dosyalar -->
-- Controller örneği: `app/Http/Controllers/...`
-- Servis örneği: `app/Services/...`
-- Test örneği: `tests/Feature/...`
+<!-- files worth imitating when writing new code -->
+- Controller example: `app/Http/Controllers/...`
+- Service example: `app/Services/...`
+- Test example: `tests/Feature/...`
 
-## Dokunulmaz alanlar
+## Off-limits areas
 
-<!-- ZOR seviyeye zorlanacak yerler -->
-- `database/migrations/` — migration yazılacaksa her zaman ZOR seviye
-- `app/Http/Middleware/Auth*` — auth akışı
-- ödeme ile ilgili her şey
+<!-- anything listed here forces HARD tier -->
+- `database/migrations/` — any migration is HARD tier
+- `app/Http/Middleware/Auth*` — auth flow
+- anything payment-related
 
-## Bilinen tuzaklar
+## Known pitfalls
 
-<!-- Modelin bilemeyeceği, tekrar eden hatalar -->
+<!-- recurring mistakes a model could not know about -->

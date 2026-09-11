@@ -1,7 +1,7 @@
 {
   "name": "@endigitals/pi-orchestra",
   "version": "0.1.0",
-  "description": "Maliyet-optimize kodlama sistemi: Claude Code orchestrator + lokal Qwen ve DeepSeek V4.1 Flash yürütücüler",
+  "description": "Cost-optimized coding system: Claude Code orchestrator with local Qwen3 and DeepSeek V4.1 Flash executors",
   "license": "MIT",
   "keywords": [
     "claude-code",
