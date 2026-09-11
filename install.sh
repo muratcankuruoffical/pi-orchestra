@@ -22,19 +22,27 @@ if [[ "$(printf '%s\n22.019\n' "$NODE_MAJOR_MINOR" | sort -V | head -1)" != "22.
 fi
 
 # --- pi ---
-if ! command -v pi >/dev/null; then
-  log "pi kuruluyor"
-  npm install -g @earendil-works/pi-coding-agent
-fi
+# --min-release-age=0: npm'in minimumReleaseAge ayarı pi'yi eski bir sürüme
+# düşürüyor ve pi-subagents ile sürüm uyumsuzluğu (pi-ai/compat) yaratıyor.
+NPM_AGE_FLAG=()
+npm install -g --min-release-age=0 --help >/dev/null 2>&1 && NPM_AGE_FLAG=(--min-release-age=0)
+
+log "pi kuruluyor/güncelleniyor"
+npm install -g "${NPM_AGE_FLAG[@]}" @earendil-works/pi-coding-agent
 log "pi $(pi --version)"
 
 # --- pi paketleri ---
+log "pi-subagents + pi-lens kuruluyor/güncelleniyor"
+npm install -g "${NPM_AGE_FLAG[@]}" pi-subagents pi-lens
 for pkg in pi-subagents pi-lens; do
-  if ! pi list 2>/dev/null | grep -q "npm:$pkg"; then
-    log "$pkg kuruluyor"
-    pi install "npm:$pkg" >/dev/null
-  fi
+  pi list 2>/dev/null | grep -q "npm:$pkg" || pi install "npm:$pkg" >/dev/null
 done
+
+# Sürüm uyumu kontrolü: pi-subagents, pi-ai'nin ./compat alt yolunu kullanıyor.
+PI_AI="$(npm root -g)/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/package.json"
+if [[ -f "$PI_AI" ]] && ! jq -e '.exports."./compat"' "$PI_AI" >/dev/null 2>&1; then
+  die "pi ($(pi --version)) ile pi-subagents uyumsuz: pi-ai'de './compat' yok. 'npm install -g --min-release-age=0 @earendil-works/pi-coding-agent' ile pi'yi güncelle."
+fi
 
 # --- ollama + lokal model ---
 if ! command -v ollama >/dev/null; then
@@ -56,7 +64,10 @@ fi
 # 32K context'li alias: Ollama'nın varsayılan num_ctx'i kod işleri için çok küçük
 if ! ollama list 2>/dev/null | grep -q "^$LOCAL_ALIAS"; then
   log "$LOCAL_ALIAS oluşturuluyor (num_ctx=32768)"
-  printf 'FROM %s\nPARAMETER num_ctx 32768\n' "$LOCAL_MODEL" | ollama create "$LOCAL_ALIAS" -f /dev/stdin
+  MF="$(mktemp -t orchestra-modelfile)"
+  printf 'FROM %s\nPARAMETER num_ctx 32768\n' "$LOCAL_MODEL" > "$MF"
+  ollama create "$LOCAL_ALIAS" -f "$MF"
+  rm -f "$MF"
 fi
 
 # --- models.json birleştir ---

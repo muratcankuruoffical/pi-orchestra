@@ -75,6 +75,26 @@ export DEEPSEEK_API_KEY=sk-...   # veya: pi → /login → DeepSeek
 - Claude Code CLI — kurulu ve login olmuş (review katmanı için)
 - ~5 GB disk, ≥16 GB RAM (lokal model için)
 
+### Sık karşılaşılan kurulum sorunu
+
+```
+Failed to load extension ... Cannot find module '.../pi-ai/dist/index.js/compat'
+```
+
+npm'de `minimumReleaseAge` ayarlıysa `npm install -g @earendil-works/pi-coding-agent`
+pi'yi eski bir sürüme düşürür ve `pi-subagents` ile uyumsuz kalır. Çözüm:
+
+```bash
+npm install -g --min-release-age=0 @earendil-works/pi-coding-agent pi-subagents pi-lens
+```
+
+`install.sh` bunu zaten kendisi yapar ve uyumsuzluk kalırsa açık bir hatayla durur.
+
+### nvm kullanıyorsan
+
+`pi` hangi node sürümü aktifse onun global dizinindeki paketleri arar. Sürüm
+değiştirdikten sonra `pi list` boş görünüyorsa paketleri o sürüm altında yeniden kur.
+
 ## Kullanım
 
 Herhangi bir proje klasöründe:
