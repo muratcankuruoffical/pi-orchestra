@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+# orchestra — bir kodlama görevini seviyesine uygun ucuz modele delege eder.
+#
+#   orchestra <basit|orta|zor> "<görev>"
+#   orchestra basit "src/utils/date.ts içindeki formatDate'de tipo var, düzelt"
+#
+# Claude Code orchestrator olarak bu script'i çağırır; kodu ucuz model yazar,
+# doğrulamayı ve review'ı Claude Code kendisi yapar.
+set -euo pipefail
+
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+  cat >&2 <<'U'
+Kullanım: orchestra <seviye> "<görev>"
+
+Seviyeler:
+  basit | simple    Qwen2.5-Coder 7B (lokal, $0)      — bash YOK, sadece dosya düzenler
+  orta  | medium    DeepSeek V4.1 Flash                — thinking off
+  zor   | hard      DeepSeek V4.1 Flash, thinking high
+
+Seçenekler:
+  --cwd <dir>       Çalışma dizini (varsayılan: mevcut dizin)
+  --dry-run         Çalıştırmadan komutu yazdır
+U
+  exit 2
+}
+
+[[ $# -ge 1 ]] || usage
+
+TIER=""; CWD="$PWD"; DRY=0; TASK=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cwd) CWD="$2"; shift 2 ;;
+    --dry-run) DRY=1; shift ;;
+    -h|--help) usage ;;
+    *) if [[ -z "$TIER" ]]; then TIER="$1"; else TASK="${TASK:+$TASK }$1"; fi; shift ;;
+  esac
+done
+
+[[ -n "$TASK" ]] || usage
+
+case "$TIER" in
+  basit|simple|1)
+    MODEL="ollama/qwen-coder-local"; THINK="off"; AGENT="local-coder"
+    TOOLS="read,grep,find,ls,edit,write"   # bash yok: 7B model + kabuk istenmez
+    ;;
+  orta|medium|2)
+    MODEL="deepseek/deepseek-flash"; THINK="off"; AGENT="ds-worker"; TOOLS=""
+    ;;
+  zor|hard|3)
+    MODEL="deepseek/deepseek-flash"; THINK="high"; AGENT="ds-architect"; TOOLS=""
+    ;;
+  *) echo "Bilinmeyen seviye: $TIER" >&2; usage ;;
+esac
+
+SYSFILE="$REPO/agents/$AGENT.md"
+[[ -f "$SYSFILE" ]] || { echo "Agent tanımı yok: $SYSFILE" >&2; exit 1; }
+
+# nvm kullanılıyorsa pi'nin gerektirdiği node sürümüne geç (pi-subagents >=22.19)
+if ! command -v pi >/dev/null 2>&1 || [[ "$(node -e 'const[a,b]=process.versions.node.split(".");process.stdout.write(a+"."+String(b).padStart(3,"0"))' 2>/dev/null)" < "22.019" ]]; then
+  # shellcheck disable=SC1090
+  [[ -s "$HOME/.nvm/nvm.sh" ]] && . "$HOME/.nvm/nvm.sh" && nvm use default >/dev/null 2>&1 || true
+fi
+command -v pi >/dev/null || { echo "pi bulunamadı. install.sh çalıştır." >&2; exit 1; }
+
+# YAML frontmatter'ı at, sistem promptu olarak gövdeyi kullan
+SYSTEM="$(awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n>=2' "$SYSFILE")"
+
+ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --system-prompt "$SYSTEM")
+[[ -n "$TOOLS" ]] && ARGS+=(--tools "$TOOLS")
+
+if [[ $DRY -eq 1 ]]; then
+  printf 'cwd=%s\nmodel=%s thinking=%s agent=%s tools=%s\n' "$CWD" "$MODEL" "$THINK" "$AGENT" "${TOOLS:-<hepsi>}"
+  exit 0
+fi
+
+printf '\033[2m[orchestra] %s → %s (thinking=%s)\033[0m\n' "$AGENT" "$MODEL" "$THINK" >&2
+cd "$CWD"
+exec pi "${ARGS[@]}" "$TASK"

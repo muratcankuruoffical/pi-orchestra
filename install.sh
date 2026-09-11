@@ -32,17 +32,12 @@ npm install -g "${NPM_AGE_FLAG[@]}" @earendil-works/pi-coding-agent
 log "pi $(pi --version)"
 
 # --- pi paketleri ---
-log "pi-subagents + pi-lens kuruluyor/güncelleniyor"
-npm install -g "${NPM_AGE_FLAG[@]}" pi-subagents pi-lens
-for pkg in pi-subagents pi-lens; do
+log "pi-lens kuruluyor/güncelleniyor"
+npm install -g "${NPM_AGE_FLAG[@]}" pi-lens
+for pkg in pi-lens; do
   pi list 2>/dev/null | grep -q "npm:$pkg" || pi install "npm:$pkg" >/dev/null
 done
 
-# Sürüm uyumu kontrolü: pi-subagents, pi-ai'nin ./compat alt yolunu kullanıyor.
-PI_AI="$(npm root -g)/@earendil-works/pi-coding-agent/node_modules/@earendil-works/pi-ai/package.json"
-if [[ -f "$PI_AI" ]] && ! jq -e '.exports."./compat"' "$PI_AI" >/dev/null 2>&1; then
-  die "pi ($(pi --version)) ile pi-subagents uyumsuz: pi-ai'de './compat' yok. 'npm install -g --min-release-age=0 @earendil-works/pi-coding-agent' ile pi'yi güncelle."
-fi
 
 # --- ollama + lokal model ---
 if ! command -v ollama >/dev/null; then
@@ -82,22 +77,25 @@ jq --arg repo "$REPO" '
   .defaultProvider   = (.defaultProvider   // "deepseek")
   | .defaultModel    = (.defaultModel      // "deepseek-flash")
   | .packages        = ((.packages // []) + ["npm:pi-subagents", "npm:pi-lens"] | unique)
-  | .skills          = ((.skills   // []) + [$repo + "/skills"]  | unique)
-  | .prompts         = ((.prompts  // []) + [$repo + "/prompts"] | unique)
-  | .subagents       = ((.subagents // {}) * {
-      defaultModel: ((.subagents.defaultModel) // "deepseek-flash"),
-      defaultProvider: ((.subagents.defaultProvider) // "deepseek"),
-      agentScanDirs: (((.subagents.agentScanDirs) // []) + [$repo + "/agents"] | unique)
-    })
   | .enabledModels   = ((.enabledModels // []) + ["deepseek/*", "ollama/*", "anthropic/*"] | unique)
 ' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
 log "settings.json güncellendi"
+
+# --- orchestra CLI ve Claude Code skill'i ---
+mkdir -p "$HOME/.local/bin" "$HOME/.claude/skills"
+ln -sfn "$REPO/bin/orchestra" "$HOME/.local/bin/orchestra"
+ln -sfn "$REPO/claude-skill" "$HOME/.claude/skills/orchestra"
+log "orchestra → ~/.local/bin/orchestra, skill → ~/.claude/skills/orchestra"
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) warn "~/.local/bin PATH'te değil. Shell profiline ekle: export PATH=\"\$HOME/.local/bin:\$PATH\"" ;;
+esac
 
 # --- kontroller ---
 echo
 if [[ -z "${DEEPSEEK_API_KEY:-}" ]] && ! jq -e '.deepseek' "$PI_DIR/auth.json" >/dev/null 2>&1; then
   warn "DeepSeek anahtarı yok. 'export DEEPSEEK_API_KEY=sk-...' ya da pi içinde '/login' → DeepSeek."
 fi
-command -v claude >/dev/null || warn "Claude Code CLI bulunamadı — review katmanı çalışmaz. https://claude.com/claude-code"
+command -v claude >/dev/null || warn "Claude Code CLI bulunamadı — orchestrator katmanı bu. https://claude.com/claude-code"
 
-log "Kurulum bitti. Bir proje klasöründe 'pi' çalıştır, sonra: /orchestrate <görev>"
+log "Kurulum bitti. Bir proje klasöründe 'claude' çalıştır ve normal konuş; orchestra skill'i devreye girer."
