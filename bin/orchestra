@@ -149,6 +149,10 @@ cd "$CWD"
 # The local model tends to normalize code style beyond the requested change.
 # Printing the diff automatically keeps that from slipping past the orchestrator.
 IS_GIT=0; git rev-parse --git-dir >/dev/null 2>&1 && IS_GIT=1
+if [[ $IS_GIT -eq 0 ]]; then
+  printf '\033[33m[orchestra] not a git repository: no diff will be shown and there is no way to\n' >&2
+  printf '            revert what the delegated model writes. Run: git init && git add -A && git commit\033[0m\n' >&2
+fi
 
 set +e
 pi "${ARGS[@]}" "$TASK"

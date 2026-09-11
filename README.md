@@ -253,6 +253,8 @@ install.sh
 
 **Delegated runs disable pi extensions (`-ne`).** `pi-lens` indexes the whole project at startup, which is fine on a small repo and unusable on a large one: on a 5,200-file Laravel project the same task finished in 7 seconds with extensions off and had not finished after five minutes with them on. Delegation has to be predictable, so extensions stay off.
 
+**Delegation assumes a git repository.** The diff report and the ability to revert both depend on it. `orchestra` warns loudly when there is no repo, because a silent delegated write with no undo is the worst failure mode this system has.
+
 **The fix loop is capped at 2 rounds.** After that the system stops and reports, rather than burning quota and money in a loop.
 
 **Small fixes are not delegated.** Re-delegating a three-line type or import fix costs more in latency than it saves; the orchestrator does it itself.
