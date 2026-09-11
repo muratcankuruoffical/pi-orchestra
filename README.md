@@ -184,7 +184,32 @@ What stays with the orchestrator and is never delegated: the architectural decis
 
 ## Per-project context
 
-Put an `AGENTS.md` at the project root; both Claude Code and pi read it. Template: `examples/AGENTS.example.md`. Recording the verification commands, the pattern files worth imitating, and the "touching this means HARD tier" areas measurably improves classification quality.
+Run this once per project:
+
+```bash
+cd ~/projects/my-app
+orchestra init
+```
+
+```
+Project: /Users/me/projects/my-app
+  ✓ CLAUDE.md found — inherited automatically
+  ✓ bridged 5 skill(s) from .claude/skills via .pi/settings.json
+```
+
+Two different mechanisms are at work, and only one needs setup:
+
+**`CLAUDE.md` / `AGENTS.md` — automatic.** pi discovers and loads them itself, so every delegated model starts with your architecture rules, naming conventions and constraints. Nothing to configure. Verified on a 523-line `CLAUDE.md`: the delegated model answered questions about the project's global scopes and traits without reading a single file.
+
+**`.claude/skills` — needs the bridge.** pi looks for skills under `.pi/skills` and never sees Claude Code's directory. `orchestra init` writes a three-line `.pi/settings.json` pointing at it:
+
+```json
+{ "skills": ["../.claude/skills"] }
+```
+
+Skills load on demand: their name and description go into the system prompt, and the model reads the `SKILL.md` body itself when the task calls for it. Commit `.pi/settings.json` so your team shares it.
+
+If a project has no `CLAUDE.md`, write one — or start from `examples/AGENTS.example.md`. Recording the verification commands, the pattern files worth imitating, and the "touching this means HARD tier" areas measurably improves classification quality.
 
 ## Layout
 
@@ -209,6 +234,8 @@ install.sh
 **Verification always belongs to the orchestrator.** Trusting a "tests passed" claim is the easiest way for this architecture to break. Opus runs the command and reads the output itself.
 
 **`orchestra` prints the diff itself.** Models normalize code style (quote characters, indentation) beyond the requested change, and no amount of prompting stopped it — one even reported that it had changed nothing else. This happens at every tier, not just the local one. So the defense is mechanical rather than a matter of trusting the model: the diff always lands in front of the orchestrator.
+
+**Delegated runs disable pi extensions (`-ne`).** `pi-lens` indexes the whole project at startup, which is fine on a small repo and unusable on a large one: on a 5,200-file Laravel project the same task finished in 7 seconds with extensions off and had not finished after five minutes with them on. Delegation has to be predictable, so extensions stay off.
 
 **The fix loop is capped at 2 rounds.** After that the system stops and reports, rather than burning quota and money in a loop.
 

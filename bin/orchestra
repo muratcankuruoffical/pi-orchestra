@@ -19,6 +19,7 @@ REPO="$(cd "$(dirname "$SELF")/.." && pwd)"
 usage() {
   cat >&2 <<'U'
 Usage: orchestra <tier> "<task>"
+       orchestra init [--cwd <dir>]
 
 Tiers:
   simple    Qwen3 8B (local, $0)              — no bash, edits files only
@@ -28,11 +29,56 @@ Tiers:
 Options:
   --cwd <dir>       Working directory (default: current directory)
   --dry-run         Print the resolved configuration without running
+
+init prepares a project so delegated models inherit its context:
+  - CLAUDE.md / AGENTS.md are picked up automatically, nothing to do
+  - .claude/skills is bridged into pi via .pi/settings.json
 U
   exit 2
 }
 
 [[ $# -ge 1 ]] || usage
+
+# ------------------------------------------------------------------ init
+# pi reads CLAUDE.md and AGENTS.md on its own, but it looks for skills under
+# .pi/skills and never sees .claude/skills. This points pi at the Claude Code
+# skills directory so a delegated model gets the same project knowledge.
+if [[ "$1" == "init" ]]; then
+  shift
+  TARGET="$PWD"
+  [[ "${1:-}" == "--cwd" ]] && TARGET="$2"
+  cd "$TARGET"
+
+  echo "Project: $PWD"
+
+  for f in CLAUDE.md AGENTS.md; do
+    [[ -f "$f" ]] && echo "  ✓ $f found — inherited automatically"
+  done
+  [[ -f CLAUDE.md || -f AGENTS.md ]] || \
+    echo "  ! no CLAUDE.md or AGENTS.md — delegated models will have no project context"
+
+  if [[ -d .claude/skills ]]; then
+    mkdir -p .pi
+    if [[ -f .pi/settings.json ]]; then
+      TMP="$(mktemp)"
+      jq '.skills = ((.skills // []) + ["../.claude/skills"] | unique)' .pi/settings.json > "$TMP" \
+        && mv "$TMP" .pi/settings.json
+    else
+      printf '{\n  "skills": ["../.claude/skills"]\n}\n' > .pi/settings.json
+    fi
+    COUNT="$(find .claude/skills -name SKILL.md -maxdepth 2 2>/dev/null | wc -l | tr -d ' ')"
+    echo "  ✓ bridged $COUNT skill(s) from .claude/skills via .pi/settings.json"
+  else
+    echo "  · no .claude/skills directory — nothing to bridge"
+  fi
+
+  if [[ -d .git ]] && ! grep -qs '^\.pi/' .gitignore 2>/dev/null; then
+    echo "  · consider committing .pi/settings.json so your team shares it"
+  fi
+
+  echo "Done. Run 'claude' here and work normally."
+  exit 0
+fi
 
 TIER=""; CWD="$PWD"; DRY=0; TASK=""
 while [[ $# -gt 0 ]]; do
@@ -81,10 +127,14 @@ SYSTEM="$(awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n>=2' "$SYSFILE")"
 #                  is not needed.
 #   MEDIUM/HARD -> append. Strong models are quality-bound, not latency-bound;
 #                  keep pi's file-editing and project-context discipline.
+# -ne disables extension discovery. pi-lens indexes the whole project on
+# startup and hangs for minutes on a large codebase: on a 5,200-file Laravel
+# project the same task took 7s with -ne and had not finished after 5 minutes
+# without it. Delegated runs must be predictable, so extensions stay off.
 if [[ "$AGENT" == "local-coder" ]]; then
-  ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --system-prompt "$SYSTEM")
+  ARGS=(-p -ne --no-session --model "$MODEL" --thinking "$THINK" --system-prompt "$SYSTEM")
 else
-  ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --append-system-prompt "$SYSTEM")
+  ARGS=(-p -ne --no-session --model "$MODEL" --thinking "$THINK" --append-system-prompt "$SYSTEM")
 fi
 [[ -n "$TOOLS" ]] && ARGS+=(--tools "$TOOLS")
 

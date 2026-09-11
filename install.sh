@@ -37,15 +37,14 @@ if [[ "$(printf '%s\n22.019\n' "$NODE_V" | sort -V | head -1)" != "22.019" ]]; t
 fi
 
 if [[ $CHECK_ONLY -eq 0 ]]; then
-  # ------------------------------------------------------------- pi + pi-lens
+  # --------------------------------------------------------------------- pi
   # --min-release-age=0: if npm has minimumReleaseAge configured, pi installs at
   # an older version and becomes incompatible with its extensions (pi-ai/compat).
   NPM_AGE_FLAG=()
   npm install -g --min-release-age=0 --help >/dev/null 2>&1 && NPM_AGE_FLAG=(--min-release-age=0)
 
-  log "Installing/updating pi + pi-lens"
-  npm install -g "${NPM_AGE_FLAG[@]}" @earendil-works/pi-coding-agent pi-lens
-  pi list 2>/dev/null | grep -q "npm:pi-lens" || pi install npm:pi-lens >/dev/null
+  log "Installing/updating pi"
+  npm install -g "${NPM_AGE_FLAG[@]}" @earendil-works/pi-coding-agent
 
   # -------------------------------------------------------- ollama + local model
   if ! command -v ollama >/dev/null; then
@@ -91,7 +90,6 @@ if [[ $CHECK_ONLY -eq 0 ]]; then
   jq '
       .defaultProvider = (.defaultProvider // "deepseek")
     | .defaultModel    = (.defaultModel    // "deepseek-flash")
-    | .packages        = ((.packages     // []) + ["npm:pi-lens"] | unique)
     | .enabledModels   = ((.enabledModels // []) + ["deepseek/*", "ollama/*"] | unique)
   ' "$SETTINGS" > "$SETTINGS.tmp" && mv "$SETTINGS.tmp" "$SETTINGS"
   log "pi settings updated"
