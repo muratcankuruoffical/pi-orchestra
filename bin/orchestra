@@ -21,7 +21,7 @@ usage() {
 Kullanım: orchestra <seviye> "<görev>"
 
 Seviyeler:
-  basit | simple    Qwen2.5-Coder 7B (lokal, $0)      — bash YOK, sadece dosya düzenler
+x
   orta  | medium    DeepSeek V4.1 Flash                — thinking off
   zor   | hard      DeepSeek V4.1 Flash, thinking high
 
@@ -48,7 +48,7 @@ done
 
 case "$TIER" in
   basit|simple|1)
-    MODEL="ollama/qwen-coder-local"; THINK="off"; AGENT="local-coder"
+    MODEL="ollama/qwen3-local"; THINK="off"; AGENT="local-coder"
     TOOLS="read,grep,find,ls,edit,write"   # bash yok: 7B model + kabuk istenmez
     ;;
   orta|medium|2)
@@ -73,10 +73,17 @@ command -v pi >/dev/null || { echo "pi bulunamadı. install.sh çalıştır." >&
 # YAML frontmatter'ı at, sistem promptu olarak gövdeyi kullan
 SYSTEM="$(awk 'BEGIN{n=0} /^---[[:space:]]*$/{n++; next} n>=2' "$SYSFILE")"
 
-# --append-system-prompt: pi'nin varsayılan promptu (araç kullanım disiplini dahil)
-# korunur, agent kuralları üstüne eklenir. Küçük modeller bu scaffolding olmadan
-# tool call üretmek yerine JSON'u düz metin olarak yazıyor.
-ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --append-system-prompt "$SYSTEM")
+# Sistem promptu modu katmana göre değişir:
+#   BASİT  → replace. Lokal model gecikme darboğazı; pi'nin büyük varsayılan
+#            promptunu işlemek 8B'de süreyi ikiye katlıyor (136s → 58s ölçüldü).
+#            Qwen3 native tool_calls ürettiği için o scaffolding'e ihtiyaç yok.
+#   ORTA/ZOR → append. Güçlü modellerde darboğaz gecikme değil kalite;
+#            pi'nin dosya düzenleme ve proje bağlamı disiplini korunsun.
+if [[ "$AGENT" == "local-coder" ]]; then
+  ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --system-prompt "$SYSTEM")
+else
+  ARGS=(-p --no-session --model "$MODEL" --thinking "$THINK" --append-system-prompt "$SYSTEM")
+fi
 [[ -n "$TOOLS" ]] && ARGS+=(--tools "$TOOLS")
 
 if [[ $DRY -eq 1 ]]; then
@@ -86,4 +93,26 @@ fi
 
 printf '\033[2m[orchestra] %s → %s (thinking=%s)\033[0m\n' "$AGENT" "$MODEL" "$THINK" >&2
 cd "$CWD"
-exec pi "${ARGS[@]}" "$TASK"
+
+# Değişiklik öncesi durumu kaydet ki sonunda gerçekten ne değiştiğini gösterebilelim.
+# Lokal model istenmeyen stil normalizasyonu yapmaya eğilimli; diff'i otomatik
+# yazdırmak orchestrator'ın bunu gözden kaçırmasını engelliyor.
+IS_GIT=0; git rev-parse --git-dir >/dev/null 2>&1 && IS_GIT=1
+
+set +e
+pi "${ARGS[@]}" "$TASK"
+PI_STATUS=$?
+set -e
+
+if [[ $IS_GIT -eq 1 ]]; then
+  CHANGED="$(git diff --stat 2>/dev/null | tail -1)"
+  if [[ -n "$CHANGED" ]]; then
+    printf '\n\033[1m[orchestra] değişiklikler:\033[0m %s\n' "$CHANGED" >&2
+    git --no-pager diff >&2
+    printf '\033[2m[orchestra] istenen değişiklik dışında satır varsa geri al: git checkout -p <dosya>\033[0m\n' >&2
+  else
+    printf '\n\033[33m[orchestra] hiçbir dosya değişmedi.\033[0m\n' >&2
+  fi
+fi
+
+exit $PI_STATUS

@@ -8,12 +8,13 @@
         "supportsDeveloperRole": false,
         "supportsReasoningEffort": false,
         "supportsUsageInStreaming": false,
-        "maxTokensField": "max_tokens"
+        "maxTokensField": "max_tokens",
+        "thinkingFormat": "qwen-chat-template"
       },
       "models": [
         {
-          "id": "qwen-coder-local",
-          "name": "Qwen2.5 Coder 7B (local)",
+          "id": "qwen3-local",
+          "name": "Qwen3 8B (local)",
           "reasoning": false,
           "input": [
             "text"

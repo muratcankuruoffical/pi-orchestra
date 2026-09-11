@@ -1,6 +1,6 @@
 ---
 name: orchestra
-description: Kodlama görevlerini zorluk seviyesine göre sınıflandırıp ucuz modellere (lokal Qwen2.5-Coder veya DeepSeek V4.1 Flash) delege eder, sonucu kendisi doğrulayıp entegre eder. Kullanıcı kod yazmanı, bir bug düzeltmeni, refactor etmeni veya feature eklemeni istediğinde, kodu yazmaya başlamadan ÖNCE bunu uygula.
+description: Kodlama görevlerini zorluk seviyesine göre sınıflandırıp ucuz modellere (lokal Qwen3 veya DeepSeek V4.1 Flash) delege eder, sonucu kendisi doğrulayıp entegre eder. Kullanıcı kod yazmanı, bir bug düzeltmeni, refactor etmeni veya feature eklemeni istediğinde, kodu yazmaya başlamadan ÖNCE bunu uygula.
 ---
 
 # Orchestra — maliyet-optimize kodlama
@@ -21,7 +21,7 @@ orchestra <basit|orta|zor> "<görev brief'i>"
 
 Görevi oku, gerekiyorsa ilgili dosyalara bak, **tek bir** seviye seç ve seçimini kullanıcıya tek cümleyle gerekçelendir.
 
-### BASİT → `orchestra basit` (lokal Qwen2.5-Coder 7B, $0, bash yok)
+### BASİT → `orchestra basit` (lokal Qwen3 8B, $0, bash yok)
 
 Hepsi birden doğruysa:
 
@@ -86,9 +86,22 @@ Brief'i sen yazarsın çünkü kod tabanını sen okudun. Tek satırlık görevi
 
 Delege edilen iş döndükten sonra **sen** doğrula. "Testler geçti" raporuna güvenme; çıktıyı kendin gör.
 
-1. `git diff` ile ne değiştiğine bak. Brief'in dışına çıkılmışsa geri al.
+1. **`git diff`'i satır satır oku.** İstenen değişiklik dışında tek satır bile varsa geri al.
 2. Projenin kendi komutlarını çalıştır: typecheck → lint → test. Komutları `AGENTS.md`, `CLAUDE.md`, `package.json`, `composer.json`, `Makefile` veya `pyproject.toml` içinden bul.
 3. BASİT seviyede `ESCALATE:` cevabı geldiyse kod yazılmamış demektir — seviyeyi yükselt ve yeniden delege et.
+
+### Bilinen arıza: lokal model kod stilini normalize ediyor
+
+Lokal model (Qwen3 8B) düzenlediği bloğu yeniden yazarken tırnak tipini, girintiyi ve benzeri stil öğelerini kendi tercihine çeviriyor — prompt'ta açıkça yasaklanmasına rağmen. Ölçülmüş ve tekrarlanan bir davranış.
+
+Bu yüzden BASİT seviyeden dönen her diff'i **mutlaka** kendin oku. Tek satırlık bir tipo düzeltmesi diff'te 5 satır değiştiriyorsa, fazlası stil gürültüsüdür. İlgisiz hunk'ları geri al:
+
+```bash
+git diff                  # önce tamamını gör
+git checkout -p <dosya>   # ilgisiz hunk'ları seçerek geri al
+```
+
+Gürültü çoksa dosyayı sıfırlayıp düzeltmeyi kendin yapmak daha hızlıdır — tek satırlık iş için yeniden delege etme.
 
 ---
 

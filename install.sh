@@ -9,8 +9,8 @@ REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PI_DIR="$HOME/.pi/agent"
 SETTINGS="$PI_DIR/settings.json"
 MODELS="$PI_DIR/models.json"
-LOCAL_MODEL="qwen2.5-coder:7b"
-LOCAL_ALIAS="qwen-coder-local"
+LOCAL_MODEL="qwen3:8b"
+LOCAL_ALIAS="qwen3-local"
 CHECK_ONLY=0
 [[ "${1:-}" == "--check" ]] && CHECK_ONLY=1
 

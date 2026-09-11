@@ -17,7 +17,7 @@ Fikir basit: **yargı pahalı, kod yazımı ucuz.** Opus'un asıl değeri planla
       │                │                 │
       ▼                ▼                 ▼
  orchestra basit  orchestra orta   orchestra zor
- Qwen2.5-Coder    DeepSeek         DeepSeek V4.1
+ Qwen3 8B         DeepSeek         DeepSeek V4.1
  7B (lokal, $0)   V4.1 Flash       Flash, thinking:high
       │                │                 │
  typo / küçük     feature /         mimari /
@@ -43,7 +43,7 @@ Fikir basit: **yargı pahalı, kod yazımı ucuz.** Opus'un asıl değeri planla
 | Katman | Nerede çalışır | Maliyet |
 |---|---|---|
 | Orchestrator + planner | Claude Code, Opus 5 | **$0 marjinal** (abonelik) |
-| BASİT | Ollama, Qwen2.5-Coder 7B | **$0** |
+| BASİT | Ollama, Qwen3 8B | **$0** |
 | ORTA / ZOR | DeepSeek V4.1 Flash (`deepseek-flash`) | ~$0.15 / $0.60 per M |
 | Integration + review + fix | Claude Code, Opus 5 | **$0 marjinal** (abonelik) |
 
@@ -80,7 +80,7 @@ Her şeyin yerinde olduğunu doğrula:
 ==> Durum
   ✓ pi 0.85.1
   ✓ Claude Code 2.1.268 — orchestrator katmanı
-  ✓ lokal model hazır (qwen-coder-local, 32K context)
+  ✓ lokal model hazır (qwen3-local, 32K context)
   ✓ DeepSeek anahtarı bağlı
   ✓ orchestra PATH'te
   ✓ Claude Code skill'i kurulu
@@ -91,7 +91,7 @@ Her şeyin yerinde olduğunu doğrula:
 `install.sh` idempotenttir ve mevcut ayarlarını ezmez:
 
 - `pi` + `pi-lens` kurar (npm'in `minimumReleaseAge` kapısını aşarak)
-- Ollama'yı kurar, `qwen2.5-coder:7b` indirir, 32K context'li `qwen-coder-local` alias'ını oluşturur
+- Ollama'yı kurar, `qwen3:8b` indirir, 32K context'li `qwen3-local` alias'ını oluşturur
 - `~/.pi/agent/models.json`'a `ollama` provider'ını ve `deepseek-flash` modelini ekler
 - `bin/orchestra`'yı `~/.local/bin/` altına, skill'i `~/.claude/skills/orchestra`'ya linkler
 
@@ -187,7 +187,7 @@ Projenin köküne `AGENTS.md` koy; hem Claude Code hem pi okur. Şablon: `exampl
 claude-skill/SKILL.md   Claude Code orchestrator skill'i (rubrik + protokol)
 bin/orchestra           delegasyon CLI'ı — seviye → model + sistem promptu
 agents/
-  local-coder.md        BASİT  → ollama/qwen-coder-local, bash YOK, ESCALATE protokolü
+  local-coder.md        BASİT  → ollama/qwen3-local, bash YOK, ESCALATE protokolü
   ds-worker.md          ORTA   → deepseek/deepseek-flash, thinking off
   ds-architect.md       ZOR    → deepseek/deepseek-flash, thinking high
 config/models.json      ollama provider + deepseek-flash tanımı
@@ -196,6 +196,8 @@ install.sh
 ```
 
 ## Tasarım kararları
+
+**Lokal model Qwen3 8B, Qwen2.5-Coder değil.** Qwen2.5-Coder 7B kod kalitesi olarak daha iyi (HumanEval %88) ama **araç çağıramıyor**: Ollama'nın şablonu `<tool_call>` etiketleri istemesine rağmen model düz JSON yazıyor, dolayısıyla hiçbir dosya düzenlemesi gerçekleşmiyor. Doğrudan Ollama API'sine atılan istekle doğrulandı. Qwen3 8B native `tool_calls` üretiyor; agentic akış için kod kalitesinden önce bu şart.
 
 **Lokal modelin `bash`'i yok.** 7B model + kabuk erişimi istenmeyen bir kombinasyon. `local-coder` kapsamı aşan iş geldiğinde kod yazmak yerine `ESCALATE: <neden>` döndürür; orchestrator bunu görünce seviyeyi yükseltir.
 
@@ -230,7 +232,7 @@ npm install -g --min-release-age=0 @earendil-works/pi-coding-agent pi-lens
 Ollama parçalı indirir ve kaldığı yerden devam eder; ilerleme durursa ağı değiştirip tekrar çalıştır:
 
 ```bash
-ollama pull qwen2.5-coder:7b
+ollama pull qwen3:8b
 ```
 
 İlerlemeyi `du -k ~/.ollama/models/blobs/*-partial` ile izle — dosya önceden ayrıldığı için `ls -lh` boyutu sabit görünür, gerçek ilerleme ayrılmış blok sayısındadır.
