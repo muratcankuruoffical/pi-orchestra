@@ -18,6 +18,7 @@
     "config",
     "examples",
     "install.sh",
+    "ORCHESTRA.md",
     "README.md"
   ],
   "bin": {

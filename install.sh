@@ -99,6 +99,26 @@ if [[ $CHECK_ONLY -eq 0 ]]; then
   ln -sfn "$REPO/bin/orchestra"  "$HOME/.local/bin/orchestra"
   ln -sfn "$REPO/claude-skill"   "$HOME/.claude/skills/orchestra"
   log "Linked orchestra CLI and Claude Code skill"
+
+  # A skill alone does not fire reliably: its description is only a suggestion to
+  # the model, which often starts working directly. The directive in CLAUDE.md is
+  # always in context, so that is what actually enforces delegation.
+  cp "$REPO/ORCHESTRA.md" "$HOME/.claude/ORCHESTRA.md"
+  CC_MD="$HOME/.claude/CLAUDE.md"
+  touch "$CC_MD"
+  grep -q '@ORCHESTRA.md' "$CC_MD" || printf '@ORCHESTRA.md\n' >> "$CC_MD"
+  log "Installed ORCHESTRA.md and wired it into ~/.claude/CLAUDE.md"
+
+  # Allowlist only the low-risk commands. 'orchestra simple' runs the local model,
+  # which has no bash tool; medium/hard give the remote model shell access and
+  # deliberately keep prompting.
+  CC_SETTINGS="$HOME/.claude/settings.json"
+  [[ -f "$CC_SETTINGS" ]] || echo '{}' > "$CC_SETTINGS"
+  TMP="$(mktemp)"
+  jq '.permissions = ((.permissions // {}) | .allow = ((.allow // []) +
+        ["Bash(orchestra simple *)", "Bash(orchestra init)", "Bash(orchestra init *)"] | unique))' \
+     "$CC_SETTINGS" > "$TMP" && mv "$TMP" "$CC_SETTINGS"
+  log "Allowlisted orchestra simple / orchestra init"
 fi
 
 # ---------------------------------------------------------------------- status
@@ -134,6 +154,12 @@ esac
 [[ -e "$HOME/.claude/skills/orchestra/SKILL.md" ]] \
   && ok "Claude Code skill installed" \
   || warn "skill not linked: ~/.claude/skills/orchestra"
+
+if [[ -f "$HOME/.claude/ORCHESTRA.md" ]] && grep -qs '@ORCHESTRA.md' "$HOME/.claude/CLAUDE.md"; then
+  ok "delegation directive active in ~/.claude/CLAUDE.md"
+else
+  warn "directive missing → the skill will not fire reliably. Run ./install.sh"
+fi
 
 echo
 if [[ $CHECK_ONLY -eq 1 ]]; then

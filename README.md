@@ -91,12 +91,28 @@ Verify everything is in place:
 
 `--check` installs nothing; it only inspects. When something breaks later, start here.
 
+### Make it actually fire
+
+A Claude Code skill is model-invoked: its description is a suggestion, and when a task arrives with clear intent the model often just starts working. In practice the skill will not fire reliably on its own.
+
+The installer therefore copies `ORCHESTRA.md` into `~/.claude/` and adds `@ORCHESTRA.md` to your global `CLAUDE.md`. `CLAUDE.md` is always in context, so the directive holds. Verified: with the directive in place, a "fix this typo" request invoked the skill first and classified the tier before touching any file; without it, the same request was handled directly.
+
+It also allowlists two low-risk commands so they do not prompt every time:
+
+```json
+{ "permissions": { "allow": ["Bash(orchestra simple *)", "Bash(orchestra init)", "Bash(orchestra init *)"] } }
+```
+
+`orchestra simple` runs the local model, which has no `bash` tool and can only edit files. `medium` and `hard` give the remote model shell access, so they keep prompting — approve those yourself.
+
 The installer is idempotent and does not overwrite your existing settings. It:
 
 - installs `pi` and `pi-lens` (bypassing npm's `minimumReleaseAge` gate)
 - installs Ollama, downloads `qwen3:8b`, creates the 32K-context `qwen3-local` alias
 - adds the `ollama` provider and the `deepseek-flash` model to `~/.pi/agent/models.json`
 - links `bin/orchestra` into `~/.local/bin/` and the skill into `~/.claude/skills/orchestra`
+- installs `ORCHESTRA.md` and wires it into your global `CLAUDE.md`
+- allowlists `orchestra simple` and `orchestra init`
 
 ### Requirements
 
@@ -274,6 +290,10 @@ Track progress with `du -k ~/.ollama/models/blobs/*-partial` — the file is pre
 **DeepSeek `Insufficient Balance` (HTTP 402)**
 
 The key is valid but the balance is empty; top up at `platform.deepseek.com`. Note that an invalid model id returns 404, not 402 — do not confuse the two.
+
+**The skill never fires / no `[orchestra]` line appears**
+
+Claude wrote the code itself instead of delegating. Check that `~/.claude/CLAUDE.md` contains `@ORCHESTRA.md` and that `~/.claude/ORCHESTRA.md` exists. Skills alone are not enough; the directive in `CLAUDE.md` is what makes it reliable. Skills and `CLAUDE.md` load at session start, so restart `claude` after installing.
 
 **Ollama is not running**
 
