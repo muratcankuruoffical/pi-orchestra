@@ -154,9 +154,65 @@ if [[ $IS_GIT -eq 0 ]]; then
   printf '            revert what the delegated model writes. Run: git init && git add -A && git commit\033[0m\n' >&2
 fi
 
+# pi prints nothing until the run finishes and applies no request timeout of its
+# own. Two failure modes look identical to a caller watching a silent terminal:
+# a dropped connection leaves pi waiting forever with no open socket, and a cold
+# Ollama model load keeps it quiet for minutes while it is working fine. So run
+# pi under a watchdog that reports progress and kills only a provably stuck run.
+#
+#   ORCHESTRA_TIMEOUT        hard ceiling for one run              (default 1800)
+#   ORCHESTRA_STALL_TIMEOUT  seconds with no network connection    (default 120)
+#   ORCHESTRA_HEARTBEAT      progress line interval, 0 disables    (default 20)
+TIMEOUT="${ORCHESTRA_TIMEOUT:-1800}"
+STALL="${ORCHESTRA_STALL_TIMEOUT:-120}"
+HEARTBEAT="${ORCHESTRA_HEARTBEAT:-20}"
+
 set +e
-pi "${ARGS[@]}" "$TASK"
-PI_STATUS=$?
+pi "${ARGS[@]}" "$TASK" &
+PI_PID=$!
+
+VERDICT=""
+ELAPSED=0; STALLED=0; STEP=5
+while kill -0 "$PI_PID" 2>/dev/null; do
+  sleep "$STEP"
+  kill -0 "$PI_PID" 2>/dev/null || break
+  ELAPSED=$((ELAPSED + STEP))
+
+  # No open socket means the provider connection is gone. Tool calls close it
+  # briefly, so only a sustained absence counts as stuck.
+  if [[ "$STALL" -gt 0 ]]; then
+    if [[ "$(lsof -nP -p "$PI_PID" 2>/dev/null | grep -c TCP)" -eq 0 ]]; then
+      STALLED=$((STALLED + STEP))
+    else
+      STALLED=0
+    fi
+    [[ "$STALLED" -ge "$STALL" ]] && { VERDICT="stalled"; break; }
+  fi
+
+  [[ "$TIMEOUT" -gt 0 && "$ELAPSED" -ge "$TIMEOUT" ]] && { VERDICT="timeout"; break; }
+
+  if [[ "$HEARTBEAT" -gt 0 && $((ELAPSED % HEARTBEAT)) -eq 0 ]]; then
+    printf '\033[2m[orchestra] %ss… still working (pi prints its answer only at the end)\033[0m\n' "$ELAPSED" >&2
+  fi
+done
+
+if [[ -n "$VERDICT" ]]; then
+  kill -TERM "$PI_PID" 2>/dev/null
+  sleep 2
+  kill -KILL "$PI_PID" 2>/dev/null
+  wait "$PI_PID" 2>/dev/null
+  PI_STATUS=124
+  if [[ "$VERDICT" == "stalled" ]]; then
+    printf '\n\033[31m[orchestra] no network connection for %ss — the request died, pi killed.\n' "$STALL" >&2
+    printf '            Check your connection and run the same command again.\033[0m\n' >&2
+  else
+    printf '\n\033[31m[orchestra] timed out after %ss — pi killed.\n' "$TIMEOUT" >&2
+    printf '            Split the task, or raise ORCHESTRA_TIMEOUT.\033[0m\n' >&2
+  fi
+else
+  wait "$PI_PID"
+  PI_STATUS=$?
+fi
 set -e
 
 if [[ $IS_GIT -eq 1 ]]; then

@@ -172,6 +172,31 @@ orchestra medium --cwd ~/project "..."
 
 When the working directory is a git repository, `orchestra` prints the resulting diff automatically.
 
+### When a run looks stuck
+
+`pi` prints its answer only when the run finishes, so a working run and a dead one
+look the same: a silent terminal. Two different things hide behind that silence.
+
+A dropped connection is the real hang. `pi` applies no request timeout of its own,
+so when the socket dies the process waits forever — measured at 40 minutes with 0%
+CPU and no open TCP connection, never exiting on its own. A cold Ollama model load
+is the false alarm: SIMPLE tier stayed quiet for 4m10s at 0% CPU before answering,
+working correctly the whole time.
+
+`orchestra` therefore runs `pi` under a watchdog. It prints a progress line while
+the run is alive, and kills it only when it is provably stuck — no open socket for
+`ORCHESTRA_STALL_TIMEOUT` seconds, or past the `ORCHESTRA_TIMEOUT` ceiling. Both
+exit with status 124 and say which limit fired.
+
+```bash
+ORCHESTRA_TIMEOUT=1800        # hard ceiling for one run, 0 disables
+ORCHESTRA_STALL_TIMEOUT=120   # seconds with no network connection, 0 disables
+ORCHESTRA_HEARTBEAT=20        # progress line interval, 0 disables
+```
+
+Raise `ORCHESTRA_TIMEOUT` for a genuinely long HARD run; raise
+`ORCHESTRA_STALL_TIMEOUT` if a slow local model trips the stall detector.
+
 ## Tracking quota and cost
 
 ```bash
